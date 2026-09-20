@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <!--
+    Mike Dude's GVK Pattern: Planetary Convoy & Escort Network
+    Event-based scripted spawner deploying a convoy leader with follow escorts,
+    formation breaking on combat engagement, and unclamp of 800m turret ranges.
+  -->
+  <SpawnGroups>
+    <SpawnGroup>
+      <Id>
+        <TypeId>SpawnGroupDefinition</TypeId>
+        <SubtypeId>GVK-SpawnGroup-ConvoyLeader</SubtypeId>
+      </Id>
+      <Description>[MES Spawn Group]</Description>
+      <IsPirate>true</IsPirate>
+      <Frequency>1.0</Frequency>
+      <Prefabs>
+        <Prefab SubtypeId="GVK-Prefab-ConvoyLeader">
+          <Position>
+            <X>0.0</X>
+            <Y>0.0</Y>
+            <Z>0.0</Z>
+          </Position>
+          <Speed>15.0</Speed>
+          <Behaviour>GVK-Behavior-ConvoyLeader</Behaviour>
+        </Prefab>
+      </Prefabs>
+    </SpawnGroup>
+    <SpawnGroup>
+      <Id>
+        <TypeId>SpawnGroupDefinition</TypeId>
+        <SubtypeId>GVK-SpawnGroup-ConvoyEscort</SubtypeId>
+      </Id>
+      <Description>[MES Spawn Group]</Description>
+      <IsPirate>true</IsPirate>
+      <Frequency>1.0</Frequency>
+      <Prefabs>
+        <Prefab SubtypeId="GVK-Prefab-ConvoyEscort">
+          <Position>
+            <X>0.0</X>
+            <Y>0.0</Y>
+            <Z>0.0</Z>
+          </Position>
+          <Speed>15.0</Speed>
+          <Behaviour>GVK-Behavior-ConvoyEscort</Behaviour>
+        </Prefab>
+      </Prefabs>
+    </SpawnGroup>
+  </SpawnGroups>
+
+  <EntityComponents>
+    <!-- Event: Convoy Periodic Deployment -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Convoy-Event-DesertHauler</SubtypeId>
+      </Id>
+      <Description>
+        [MES Event]
+        [UseEvent:true]
+        [UniqueEvent:false]
+        [StartsReady:true]
+        [MinCooldownMs:3600000]
+        [MaxCooldownMs:5400000]
+        [ConditionIds:GVK-Convoy-EventCondition-DesertHauler]
+        [ActionIds:GVK-Convoy-EventAction-DesertHauler]
+        [ActionExecution:All]
+      </Description>
+    </EntityComponent>
+
+    <!-- Event Condition: Player Within Range of Route Coordinates -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Convoy-EventCondition-DesertHauler</SubtypeId>
+      </Id>
+      <Description>
+        [MES Event Condition]
+        [CheckPlayerNear:true]
+        [PlayerNearCoords:{X:60487.11 Y:32965.06 Z:44090.29}]
+        [PlayerNearDistanceFromCoords:12000]
+      </Description>
+    </EntityComponent>
+
+    <!-- Event Action: Spawn Convoy Encounter -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Convoy-EventAction-DesertHauler</SubtypeId>
+      </Id>
+      <Description>
+        [MES Event Action]
+        [SpawnEncounter:true]
+        [SpawnCoords:{X:60487.11 Y:32965.06 Z:44090.29}]
+        [SpawnFactionTags:GAALSIEN]
+        [SpawnData:GVK-Convoy-EventSpawner-DesertHauler]
+      </Description>
+    </EntityComponent>
+
+    <!-- Event Spawner Profile -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Convoy-EventSpawner-DesertHauler</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Spawn]
+        [UseSpawn:true]
+        [SpawningType:CustomSpawn]
+        [StartsReady:true]
+        [ProcessAsAdminSpawn:true]
+        [IgnoreSafetyChecks:true]
+        [InheritNpcAltitude:false]
+        [SpawnGroups:GVK-SpawnGroup-ConvoyLeader]
+        [SpawnGroups:GVK-SpawnGroup-ConvoyEscort]
+        [MinDistance:100]
+        [MaxDistance:300]
+        [MinAltitude:30]
+        [MaxAltitude:50]
+      </Description>
+    </EntityComponent>
+
+    <!-- Leader Behavior: CargoShip Pathing -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Behavior-ConvoyLeader</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Behavior]
+        [BehaviorName:CargoShip]
+        [AutopilotData:GVK-Autopilot-ConvoyLeader]
+        [Triggers:GVK-Trigger-LeaderCombat]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Autopilot-ConvoyLeader</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Autopilot]
+        [IdealMinSpeed:15]
+        [IdealMaxSpeed:25]
+        [FlyLevelWithGravity:true]
+        [WaypointTolerance:40]
+        [MinimumPlanetAltitude:25]
+      </Description>
+    </EntityComponent>
+
+    <!-- Escort Behavior: Escorts Leader, Breaks Formation on Threat -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Behavior-ConvoyEscort</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Behavior]
+        [BehaviorName:Escort]
+        [AutopilotData:GVK-Autopilot-ConvoyEscort]
+        [Triggers:GVK-Trigger-EscortCombat]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Autopilot-ConvoyEscort</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Autopilot]
+        [LeaderType:Owner]
+        [EngageDistance:600]
+        [DisengageDistance:1500]
+        [BreakFormationOnTarget:true]
+      </Description>
+    </EntityComponent>
+
+    <!-- Trigger: Unclamp 800m Turret Ranges on Threat -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Trigger-EscortCombat</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:TargetNear]
+        [TargetDistance:1500]
+        [UseTrigger:true]
+        [StartsReady:true]
+        [Actions:GVK-Action-EscortCombat]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Action-EscortCombat</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [SetWeaponsToMaxRange:true]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Trigger-LeaderCombat</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:Damage]
+        [UseTrigger:true]
+        [Actions:GVK-Action-EscortCombat]
+      </Description>
+    </EntityComponent>
+  </EntityComponents>
+</Definitions>

@@ -2,8 +2,8 @@
 .SYNOPSIS
     Scaffolding generator for production-ready, defensively engineered MES and RivalAI profiles.
 .DESCRIPTION
-    Generates standard Space Engineers SBC XML files following all MES/RivalAI rules:
-    - No XML comments inside <Description>
+    Generates standard Space Engineers SBC XML files following all MES/RivalAI native engine rules:
+    - No XML comments inside <Description> (uses [//Comment] instead)
     - Single SubtypeId per <Id> block
     - Correct master gates for MES Events ([ChangeCounters:true], [SpawnEncounter:true], etc.)
     - Correct tag names for RivalAI ([Spawner:] vs [SpawnData:])
@@ -14,8 +14,13 @@
     2. ConvoyLeaderEscort: Cargo ship leader with follower escorts and break-formation combat behavior.
     3. DynamicZoneLadder: Dynamic territory zone with MES Event counter-driven radius progression ladder.
     4. StoreGrid: Economy store grid setup (Prefab StoreItem, FactionTypes_Economy Builder snippet, MES Store profile).
+    5. DynamicStateNpc: Dynamic Behavior Subclass & Autopilot Switching (CargoShip transit -> Fighter dogfight -> transit return).
+    6. PlanetaryInstallation: Static defended outpost with interior defense spawner, turret range unclamp, and distress beacon.
+    7. CombatDrone: High-performance combat drone with Fighter behavior, 6-DOF strafing, lead prediction, and collision evasion.
+    8. ReinforcementNetwork: Caller grid broadcasting command code on damage + responder grid receiving command and navigating to caller.
+    9. BossEncounter: Multi-phase boss with health/damage thresholds, escalation phases, custom chat taunts, and weapon unclamp.
 .PARAMETER Pattern
-    Pattern type: 'DefendedWreck', 'ConvoyLeaderEscort', 'DynamicZoneLadder', 'StoreGrid'.
+    Pattern type: 'DefendedWreck', 'ConvoyLeaderEscort', 'DynamicZoneLadder', 'StoreGrid', 'DynamicStateNpc', 'PlanetaryInstallation', 'CombatDrone', 'ReinforcementNetwork', 'BossEncounter'.
 .PARAMETER ModPrefix
     Mod prefix to prevent profile collisions (e.g. 'GVK', 'MES').
 .PARAMETER Name
@@ -27,7 +32,17 @@
 #>
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet("DefendedWreck", "ConvoyLeaderEscort", "DynamicZoneLadder", "StoreGrid")]
+    [ValidateSet(
+        "DefendedWreck",
+        "ConvoyLeaderEscort",
+        "DynamicZoneLadder",
+        "StoreGrid",
+        "DynamicStateNpc",
+        "PlanetaryInstallation",
+        "CombatDrone",
+        "ReinforcementNetwork",
+        "BossEncounter"
+    )]
     [string]$Pattern,
 
     [Parameter(Mandatory=$true)]
@@ -59,7 +74,6 @@ switch ($Pattern) {
     "DefendedWreck" {
         Append-Header "Defended Wreck Pattern"
         [void]$sb.AppendLine(@"
-  <!-- Spawn Group Definition -->
   <SpawnGroups>
     <SpawnGroup>
       <Id>
@@ -75,11 +89,7 @@ switch ($Pattern) {
       <Frequency>1.0</Frequency>
       <Prefabs>
         <Prefab SubtypeId="${ModPrefix}-Prefab-${Name}">
-          <Position>
-            <X>0.0</X>
-            <Y>0.0</Y>
-            <Z>0.0</Z>
-          </Position>
+          <Position><X>0.0</X><Y>0.0</Y><Z>0.0</Z></Position>
           <Speed>0.0</Speed>
           <Behaviour>${ModPrefix}-Behavior-${Name}</Behaviour>
         </Prefab>
@@ -88,7 +98,6 @@ switch ($Pattern) {
   </SpawnGroups>
 
   <EntityComponents>
-    <!-- Spawn Conditions Profile -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -97,15 +106,12 @@ switch ($Pattern) {
       <Description>
         [MES Spawn Conditions]
         [RivalAiAnySpawn:true]
-        [RivalAiSpaceSpawn:true]
-        [RivalAiPlanetSpawn:true]
         [CutVoxelsAtAirtightCells:true]
         [CutVoxelSize:2.5]
         [FactionOwner:${Faction}]
       </Description>
     </EntityComponent>
 
-    <!-- Dereliction Profile -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -122,7 +128,6 @@ switch ($Pattern) {
       </Description>
     </EntityComponent>
 
-    <!-- Behavior Profile -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -137,7 +142,6 @@ switch ($Pattern) {
       </Description>
     </EntityComponent>
 
-    <!-- Trigger: On Damage (Spawn Drone & Unclamp Weapon Range) -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -147,15 +151,15 @@ switch ($Pattern) {
         [RivalAI Trigger]
         [Type:Damage]
         [UseTrigger:true]
-        [Actions:${ModPrefix}-Action-DeployDefense-${Name}]
+        [StartsReady:true]
+        [Actions:${ModPrefix}-Action-Damage-${Name}]
       </Description>
     </EntityComponent>
 
-    <!-- Action: Deploy Defense -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
-        <SubtypeId>${ModPrefix}-Action-DeployDefense-${Name}</SubtypeId>
+        <SubtypeId>${ModPrefix}-Action-Damage-${Name}</SubtypeId>
       </Id>
       <Description>
         [RivalAI Action]
@@ -165,7 +169,6 @@ switch ($Pattern) {
       </Description>
     </EntityComponent>
 
-    <!-- Spawner Profile -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -184,7 +187,6 @@ switch ($Pattern) {
       </Description>
     </EntityComponent>
 
-    <!-- Trigger: Proximity Warning -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -194,45 +196,40 @@ switch ($Pattern) {
         [RivalAI Trigger]
         [Type:PlayerNear]
         [UseTrigger:true]
-        [PlayerNearDistance:1500]
-        [Actions:${ModPrefix}-Action-ProximityWarn-${Name}]
+        [TargetDistance:1500]
+        [Actions:${ModPrefix}-Action-Proximity-${Name}]
       </Description>
     </EntityComponent>
 
-    <!-- Action: Proximity Warning -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
-        <SubtypeId>${ModPrefix}-Action-ProximityWarn-${Name}</SubtypeId>
+        <SubtypeId>${ModPrefix}-Action-Proximity-${Name}</SubtypeId>
       </Id>
       <Description>
         [RivalAI Action]
         [UseChatBroadcast:true]
-        [ChatData:${ModPrefix}-Chat-Warning-${Name}]
+        [ChatData:${ModPrefix}-Chat-Proximity-${Name}]
       </Description>
     </EntityComponent>
 
-    <!-- Chat: Warning -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
-        <SubtypeId>${ModPrefix}-Chat-Warning-${Name}</SubtypeId>
+        <SubtypeId>${ModPrefix}-Chat-Proximity-${Name}</SubtypeId>
       </Id>
       <Description>
         [RivalAI Chat]
         [UseChat:true]
         [StartsReady:true]
-        [MaxChats:1]
-        [BroadcastRandomly:false]
         [Author:${Faction} Automated Beacon]
         [Color:Red]
-        [ChatMessages:WARNING: Automated defense perimeter breached. Hostile targets will be engaged.]
-        [ChatAudio:ArcHudGPSNotification2]
-        [BroadcastType:Chat]
+        [Channel:Chat]
+        [ChatMessages:WARNING: Restricted airspace. Trespassers will be fired upon.]
+        [BroadcastRandomly:true]
       </Description>
     </EntityComponent>
 
-    <!-- Trigger: Timed Despawn Cleanup -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -266,7 +263,6 @@ switch ($Pattern) {
     "ConvoyLeaderEscort" {
         Append-Header "Convoy Leader & Escort Pattern"
         [void]$sb.AppendLine(@"
-  <!-- Spawn Group: Convoy Leader -->
   <SpawnGroups>
     <SpawnGroup>
       <Id>
@@ -285,24 +281,8 @@ switch ($Pattern) {
           <Speed>15.0</Speed>
           <Behaviour>${ModPrefix}-Behavior-Leader-${Name}</Behaviour>
         </Prefab>
-      </Prefabs>
-    </SpawnGroup>
-
-    <!-- Spawn Group: Convoy Escort -->
-    <SpawnGroup>
-      <Id>
-        <TypeId>SpawnGroupDefinition</TypeId>
-        <SubtypeId>${ModPrefix}-SpawnGroup-Escort-${Name}</SubtypeId>
-      </Id>
-      <Description>
-        [MES Spawn Group]
-        [SpawnConditionsProfiles:${ModPrefix}-SpawnCondition-${Name}]
-      </Description>
-      <IsPirate>true</IsPirate>
-      <Frequency>1.0</Frequency>
-      <Prefabs>
         <Prefab SubtypeId="${ModPrefix}-Prefab-Escort-${Name}">
-          <Position><X>0.0</X><Y>0.0</Y><Z>0.0</Z></Position>
+          <Position><X>100.0</X><Y>50.0</Y><Z>100.0</Z></Position>
           <Speed>15.0</Speed>
           <Behaviour>${ModPrefix}-Behavior-Escort-${Name}</Behaviour>
         </Prefab>
@@ -311,7 +291,6 @@ switch ($Pattern) {
   </SpawnGroups>
 
   <EntityComponents>
-    <!-- Common Spawn Condition -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -321,10 +300,11 @@ switch ($Pattern) {
         [MES Spawn Conditions]
         [RivalAiAnySpawn:true]
         [FactionOwner:${Faction}]
+        [MinAltitude:100]
+        [MaxAltitude:500]
       </Description>
     </EntityComponent>
 
-    <!-- Leader Behavior: CargoShip + Spawns Escorts -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -333,71 +313,64 @@ switch ($Pattern) {
       <Description>
         [RivalAI Behavior]
         [BehaviorName:CargoShip]
-        [AutopilotData:${ModPrefix}-Autopilot-CargoShip-${Name}]
-        [Triggers:${ModPrefix}-Trigger-SpawnEscorts-${Name}]
+        [AutopilotData:${ModPrefix}-Autopilot-Leader-${Name}]
+        [Triggers:${ModPrefix}-Trigger-LeaderDamage-${Name}]
       </Description>
     </EntityComponent>
 
-    <!-- CargoShip Autopilot -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
-        <SubtypeId>${ModPrefix}-Autopilot-CargoShip-${Name}</SubtypeId>
+        <SubtypeId>${ModPrefix}-Autopilot-Leader-${Name}</SubtypeId>
       </Id>
       <Description>
         [RivalAI Autopilot]
-        [IdealMinSpeed:15]
-        [IdealMaxSpeed:25]
+        [IdealMinSpeed:20]
+        [IdealMaxSpeed:35]
         [FlyLevelWithGravity:true]
         [WaypointTolerance:50]
       </Description>
     </EntityComponent>
 
-    <!-- Trigger: Spawn Escorts at start -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
-        <SubtypeId>${ModPrefix}-Trigger-SpawnEscorts-${Name}</SubtypeId>
+        <SubtypeId>${ModPrefix}-Trigger-LeaderDamage-${Name}</SubtypeId>
       </Id>
       <Description>
         [RivalAI Trigger]
-        [Type:Timer]
+        [Type:Damage]
         [UseTrigger:true]
-        [StartsReady:true]
-        [MaxActions:1]
-        [Actions:${ModPrefix}-Action-SpawnEscorts-${Name}]
+        [Actions:${ModPrefix}-Action-LeaderDamage-${Name}]
       </Description>
     </EntityComponent>
 
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
-        <SubtypeId>${ModPrefix}-Action-SpawnEscorts-${Name}</SubtypeId>
+        <SubtypeId>${ModPrefix}-Action-LeaderDamage-${Name}</SubtypeId>
       </Id>
       <Description>
         [RivalAI Action]
-        [SpawnEncounter:true]
-        [Spawner:${ModPrefix}-Spawner-Escort-${Name}]
+        [SetWeaponsToMaxRange:true]
+        [BroadcastCommandProfiles:true]
+        [CommandProfileIds:${ModPrefix}-Command-LeaderAttacked-${Name}]
       </Description>
     </EntityComponent>
 
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
-        <SubtypeId>${ModPrefix}-Spawner-Escort-${Name}</SubtypeId>
+        <SubtypeId>${ModPrefix}-Command-LeaderAttacked-${Name}</SubtypeId>
       </Id>
       <Description>
-        [RivalAI Spawn]
-        [UseSpawn:true]
-        [SpawningType:CustomSpawn]
-        [StartsReady:true]
-        [SpawnGroups:${ModPrefix}-SpawnGroup-Escort-${Name}]
-        [MinDistance:150]
-        [MaxDistance:250]
+        [RivalAI Command]
+        [CommandCode:${ModPrefix}_ConvoyUnderAttack]
+        [SingleRecipient:false]
+        [MatchCommandCode:true]
       </Description>
     </EntityComponent>
 
-    <!-- Escort Behavior: Escort Leader, Break Formation on Combat -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -407,7 +380,7 @@ switch ($Pattern) {
         [RivalAI Behavior]
         [BehaviorName:Escort]
         [AutopilotData:${ModPrefix}-Autopilot-Escort-${Name}]
-        [Triggers:${ModPrefix}-Trigger-EngageCombat-${Name}]
+        [Triggers:${ModPrefix}-Trigger-EscortBreakFormation-${Name}]
       </Description>
     </EntityComponent>
 
@@ -418,35 +391,36 @@ switch ($Pattern) {
       </Id>
       <Description>
         [RivalAI Autopilot]
-        [LeaderType:Owner]
-        [EngageDistance:500]
-        [DisengageDistance:1200]
-        [BreakFormationOnTarget:true]
+        [IdealMinSpeed:25]
+        [IdealMaxSpeed:50]
+        [EscortDistance:150]
+        [EscortSpeedMatch:true]
       </Description>
     </EntityComponent>
 
-    <!-- Trigger: Engage Combat (Unclamp 800m Turret Range) -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
-        <SubtypeId>${ModPrefix}-Trigger-EngageCombat-${Name}</SubtypeId>
+        <SubtypeId>${ModPrefix}-Trigger-EscortBreakFormation-${Name}</SubtypeId>
       </Id>
       <Description>
         [RivalAI Trigger]
-        [Type:TargetNear]
-        [TargetDistance:1200]
+        [Type:CommandReceived]
+        [CommandCode:${ModPrefix}_ConvoyUnderAttack]
         [UseTrigger:true]
-        [Actions:${ModPrefix}-Action-EngageCombat-${Name}]
+        [Actions:${ModPrefix}-Action-EscortEngage-${Name}]
       </Description>
     </EntityComponent>
 
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
-        <SubtypeId>${ModPrefix}-Action-EngageCombat-${Name}</SubtypeId>
+        <SubtypeId>${ModPrefix}-Action-EscortEngage-${Name}</SubtypeId>
       </Id>
       <Description>
         [RivalAI Action]
+        [ChangeBehaviorSubclass:true]
+        [NewBehaviorSubclass:Fighter]
         [SetWeaponsToMaxRange:true]
       </Description>
     </EntityComponent>
@@ -459,7 +433,6 @@ switch ($Pattern) {
         Append-Header "Dynamic Zone Ladder Pattern"
         [void]$sb.AppendLine(@"
   <EntityComponents>
-    <!-- Dynamic Zone Definition -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -476,7 +449,6 @@ switch ($Pattern) {
       </Description>
     </EntityComponent>
 
-    <!-- MES Event: Ladder Up on 10 Sandbox Points -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -524,7 +496,6 @@ switch ($Pattern) {
       </Description>
     </EntityComponent>
 
-    <!-- MES Event: Ladder Down on LessOrEqual -1 (Zero-Stripping Safe!) -->
     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
       <Id>
         <TypeId>Inventory</TypeId>
@@ -625,8 +596,739 @@ switch ($Pattern) {
 "@)
         Append-Footer
     }
+
+    "DynamicStateNpc" {
+        Append-Header "Dynamic Behavior Subclass & Autopilot Switching Pattern"
+        [void]$sb.AppendLine(@"
+  <SpawnGroups>
+    <SpawnGroup>
+      <Id>
+        <TypeId>SpawnGroupDefinition</TypeId>
+        <SubtypeId>${ModPrefix}-SpawnGroup-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [MES Spawn Group]
+        [SpawnConditionsProfiles:${ModPrefix}-SpawnCondition-${Name}]
+      </Description>
+      <IsPirate>true</IsPirate>
+      <Frequency>1.0</Frequency>
+      <Prefabs>
+        <Prefab SubtypeId="${ModPrefix}-Prefab-${Name}">
+          <Position><X>0.0</X><Y>0.0</Y><Z>0.0</Z></Position>
+          <Speed>25.0</Speed>
+          <Behaviour>${ModPrefix}-Behavior-${Name}</Behaviour>
+        </Prefab>
+      </Prefabs>
+    </SpawnGroup>
+  </SpawnGroups>
+
+  <EntityComponents>
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-SpawnCondition-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [MES Spawn Conditions]
+        [RivalAiAnySpawn:true]
+        [FactionOwner:${Faction}]
+        [MinAltitude:100]
+        [MaxAltitude:500]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Behavior-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Behavior]
+        [BehaviorName:CargoShip]
+        [AutopilotData:${ModPrefix}-Autopilot-Cruise-${Name}]
+        [SecondaryAutopilotData:${ModPrefix}-Autopilot-Combat-${Name}]
+        [TargetData:${ModPrefix}-Target-${Name}]
+        [Triggers:${ModPrefix}-Trigger-EnterCombat-Damage-${Name}]
+        [Triggers:${ModPrefix}-Trigger-EnterCombat-Target-${Name}]
+        [Triggers:${ModPrefix}-Trigger-ExitCombat-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Autopilot-Cruise-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Autopilot]
+        [IdealMinSpeed:25]
+        [IdealMaxSpeed:45]
+        [FlyLevelWithGravity:true]
+        [WaypointTolerance:50]
+        [MinimumPlanetAltitude:100]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Autopilot-Combat-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Autopilot]
+        [IdealMinSpeed:55]
+        [IdealMaxSpeed:95]
+        [FlyLevelWithGravity:false]
+        [UseVelocityCollisionEvasion:true]
+        [AllowStrafing:true]
+        [StrafeMinDurationMs:3000]
+        [StrafeMaxDurationMs:6000]
+        [UseProjectileLeadPrediction:true]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Target-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Target]
+        [UsePriorities:true]
+        [TargetRules:Grid]
+        [MaxDistance:4000]
+        [MatchAllFilters:Relation]
+        [MatchAllFilters:Powered]
+        [PrioritizeTargetSubsystems:true]
+        [TargetSubsystems:Weapons]
+        [TargetSubsystems:Thrust]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Trigger-EnterCombat-Damage-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:Damage]
+        [UseTrigger:true]
+        [StartsReady:true]
+        [TriggerTags:Cruising]
+        [Actions:${ModPrefix}-Action-EnterCombat-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Trigger-EnterCombat-Target-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:TargetNear]
+        [TargetDistance:2000]
+        [UseTrigger:true]
+        [StartsReady:true]
+        [TriggerTags:Cruising]
+        [Actions:${ModPrefix}-Action-EnterCombat-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Action-EnterCombat-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [ChangeBehaviorSubclass:true]
+        [NewBehaviorSubclass:Fighter]
+        [ChangeAutopilotProfile:true]
+        [AutopilotProfile:Secondary]
+        [SetWeaponsToMaxRange:true]
+        [DisableTriggerTags:Cruising]
+        [EnableTriggerTags:InCombat]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Trigger-ExitCombat-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:NoTargetCheck]
+        [UseTrigger:true]
+        [StartsReady:false]
+        [MinCooldownMs:15000]
+        [MaxCooldownMs:15001]
+        [TriggerTags:InCombat]
+        [Actions:${ModPrefix}-Action-ExitCombat-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Action-ExitCombat-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [ChangeBehaviorSubclass:true]
+        [NewBehaviorSubclass:CargoShip]
+        [ChangeAutopilotProfile:true]
+        [AutopilotProfile:Primary]
+        [DisableTriggerTags:InCombat]
+        [EnableTriggerTags:Cruising]
+      </Description>
+    </EntityComponent>
+  </EntityComponents>
+"@)
+        Append-Footer
+    }
+
+    "PlanetaryInstallation" {
+        Append-Header "Planetary Installation Pattern"
+        [void]$sb.AppendLine(@"
+  <SpawnGroups>
+    <SpawnGroup>
+      <Id>
+        <TypeId>SpawnGroupDefinition</TypeId>
+        <SubtypeId>${ModPrefix}-SpawnGroup-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [MES Spawn Group]
+        [SpawnConditionsProfiles:${ModPrefix}-SpawnCondition-${Name}]
+      </Description>
+      <IsPirate>true</IsPirate>
+      <Frequency>1.0</Frequency>
+      <Prefabs>
+        <Prefab SubtypeId="${ModPrefix}-Prefab-${Name}">
+          <Position><X>0.0</X><Y>0.0</Y><Z>0.0</Z></Position>
+          <Speed>0.0</Speed>
+          <Behaviour>${ModPrefix}-Behavior-${Name}</Behaviour>
+        </Prefab>
+      </Prefabs>
+    </SpawnGroup>
+  </SpawnGroups>
+
+  <EntityComponents>
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-SpawnCondition-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [MES Spawn Conditions]
+        [RivalAiAnySpawn:true]
+        [RivalAiPlanetSpawn:true]
+        [FactionOwner:${Faction}]
+        [CutVoxelsAtAirtightCells:true]
+        [CutVoxelSize:2.5]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Behavior-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Behavior]
+        [BehaviorName:Passive]
+        [TargetData:${ModPrefix}-Target-${Name}]
+        [Triggers:${ModPrefix}-Trigger-Damage-${Name}]
+        [Triggers:${ModPrefix}-Trigger-Distress-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Target-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Target]
+        [UsePriorities:true]
+        [TargetRules:Grid]
+        [MaxDistance:4000]
+        [MatchAllFilters:Relation]
+        [MatchAllFilters:Powered]
+        [PrioritizeTargetSubsystems:true]
+        [TargetSubsystems:Weapons]
+        [TargetSubsystems:Thrust]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Trigger-Damage-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:Damage]
+        [UseTrigger:true]
+        [StartsReady:true]
+        [Actions:${ModPrefix}-Action-Damage-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Action-Damage-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [SetWeaponsToMaxRange:true]
+        [SpawnEncounter:true]
+        [Spawner:${ModPrefix}-Spawner-Guards-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Spawner-Guards-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Spawn]
+        [UseSpawn:true]
+        [SpawningType:CustomSpawn]
+        [StartsReady:true]
+        [SpawnGroups:${ModPrefix}-SpawnGroup-Guards]
+        [MinDistance:150]
+        [MaxDistance:300]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Trigger-Distress-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:Damage]
+        [DamageThreshold:5000]
+        [UseTrigger:true]
+        [StartsReady:true]
+        [Actions:${ModPrefix}-Action-Distress-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Action-Distress-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [BroadcastCommandProfiles:true]
+        [CommandProfileIds:${ModPrefix}-Command-Distress-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Command-Distress-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Command]
+        [CommandCode:${ModPrefix}_BaseUnderAttack]
+        [SingleRecipient:false]
+        [MatchCommandCode:true]
+      </Description>
+    </EntityComponent>
+  </EntityComponents>
+"@)
+        Append-Footer
+    }
+
+    "CombatDrone" {
+        Append-Header "Combat Drone Pattern"
+        [void]$sb.AppendLine(@"
+  <SpawnGroups>
+    <SpawnGroup>
+      <Id>
+        <TypeId>SpawnGroupDefinition</TypeId>
+        <SubtypeId>${ModPrefix}-SpawnGroup-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [MES Spawn Group]
+        [SpawnConditionsProfiles:${ModPrefix}-SpawnCondition-${Name}]
+      </Description>
+      <IsPirate>true</IsPirate>
+      <Frequency>1.0</Frequency>
+      <Prefabs>
+        <Prefab SubtypeId="${ModPrefix}-Prefab-${Name}">
+          <Position><X>0.0</X><Y>0.0</Y><Z>0.0</Z></Position>
+          <Speed>50.0</Speed>
+          <Behaviour>${ModPrefix}-Behavior-${Name}</Behaviour>
+        </Prefab>
+      </Prefabs>
+    </SpawnGroup>
+  </SpawnGroups>
+
+  <EntityComponents>
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-SpawnCondition-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [MES Spawn Conditions]
+        [RivalAiAnySpawn:true]
+        [FactionOwner:${Faction}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Behavior-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Behavior]
+        [BehaviorName:Fighter]
+        [AutopilotData:${ModPrefix}-Autopilot-${Name}]
+        [TargetData:${ModPrefix}-Target-${Name}]
+        [Triggers:${ModPrefix}-Trigger-CombatInit-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Autopilot-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Autopilot]
+        [IdealMinSpeed:55]
+        [IdealMaxSpeed:95]
+        [FlyLevelWithGravity:false]
+        [UseVelocityCollisionEvasion:true]
+        [AllowStrafing:true]
+        [StrafeMinDurationMs:2000]
+        [StrafeMaxDurationMs:5000]
+        [UseProjectileLeadPrediction:true]
+        [BarrelRollMinDurationMs:2000]
+        [BarrelRollMaxDurationMs:4000]
+        [CollisionEvasionWaypointCalculatedAwayFromEntity:true]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Target-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Target]
+        [UsePriorities:true]
+        [TargetRules:Grid]
+        [MaxDistance:4000]
+        [MatchAllFilters:Relation]
+        [MatchAllFilters:Powered]
+        [PrioritizeTargetSubsystems:true]
+        [TargetSubsystems:Weapons]
+        [TargetSubsystems:Thrust]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Trigger-CombatInit-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:TargetNear]
+        [TargetDistance:3000]
+        [UseTrigger:true]
+        [StartsReady:true]
+        [Actions:${ModPrefix}-Action-CombatInit-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Action-CombatInit-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [SetWeaponsToMaxRange:true]
+      </Description>
+    </EntityComponent>
+  </EntityComponents>
+"@)
+        Append-Footer
+    }
+
+    "ReinforcementNetwork" {
+        Append-Header "Reinforcement Network Pattern"
+        [void]$sb.AppendLine(@"
+  <EntityComponents>
+    <!-- Caller Grid Setup (Grid under attack) -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Trigger-SendDistress-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:Damage]
+        [UseTrigger:true]
+        [StartsReady:true]
+        [Actions:${ModPrefix}-Action-SendDistress-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Action-SendDistress-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [BroadcastCommandProfiles:true]
+        [CommandProfileIds:${ModPrefix}-Command-Distress-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Command-Distress-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Command]
+        [CommandCode:${ModPrefix}_DistressSignal]
+        [SingleRecipient:false]
+        [MatchCommandCode:true]
+        [SendTargetPosition:true]
+      </Description>
+    </EntityComponent>
+
+    <!-- Responder Grid Setup (Patrol or garrison responding to call) -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Trigger-ReceiveDistress-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:CommandReceived]
+        [CommandCode:${ModPrefix}_DistressSignal]
+        [UseTrigger:true]
+        [Actions:${ModPrefix}-Action-RespondDistress-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Action-RespondDistress-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [ChangeBehaviorSubclass:true]
+        [NewBehaviorSubclass:Fighter]
+        [SetWeaponsToMaxRange:true]
+      </Description>
+    </EntityComponent>
+  </EntityComponents>
+"@)
+        Append-Footer
+    }
+
+    "BossEncounter" {
+        Append-Header "Boss Encounter Pattern"
+        [void]$sb.AppendLine(@"
+  <SpawnGroups>
+    <SpawnGroup>
+      <Id>
+        <TypeId>SpawnGroupDefinition</TypeId>
+        <SubtypeId>${ModPrefix}-SpawnGroup-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [MES Spawn Group]
+        [SpawnConditionsProfiles:${ModPrefix}-SpawnCondition-${Name}]
+      </Description>
+      <IsPirate>true</IsPirate>
+      <Frequency>1.0</Frequency>
+      <Prefabs>
+        <Prefab SubtypeId="${ModPrefix}-Prefab-${Name}">
+          <Position><X>0.0</X><Y>0.0</Y><Z>0.0</Z></Position>
+          <Speed>10.0</Speed>
+          <Behaviour>${ModPrefix}-Behavior-${Name}</Behaviour>
+        </Prefab>
+      </Prefabs>
+    </SpawnGroup>
+  </SpawnGroups>
+
+  <EntityComponents>
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-SpawnCondition-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [MES Spawn Conditions]
+        [RivalAiAnySpawn:true]
+        [FactionOwner:${Faction}]
+        [MinAltitude:200]
+        [MaxAltitude:600]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Behavior-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Behavior]
+        [BehaviorName:Cruiser]
+        [AutopilotData:${ModPrefix}-Autopilot-Cruiser-${Name}]
+        [TargetData:${ModPrefix}-Target-${Name}]
+        [Triggers:${ModPrefix}-Trigger-Phase1-Damage-${Name}]
+        [Triggers:${ModPrefix}-Trigger-Phase2-HeavyDamage-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Autopilot-Cruiser-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Autopilot]
+        [IdealMinSpeed:15]
+        [IdealMaxSpeed:30]
+        [WaypointTolerance:75]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Target-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Target]
+        [UsePriorities:true]
+        [TargetRules:Grid]
+        [MaxDistance:5000]
+        [MatchAllFilters:Relation]
+        [MatchAllFilters:Powered]
+        [PrioritizeTargetSubsystems:true]
+        [TargetSubsystems:Weapons]
+        [TargetSubsystems:Power]
+      </Description>
+    </EntityComponent>
+
+    <!-- Phase 1: Initial Damage -> Unclamp Weapons & Taunt -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Trigger-Phase1-Damage-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:Damage]
+        [UseTrigger:true]
+        [StartsReady:true]
+        [MaxActions:1]
+        [Actions:${ModPrefix}-Action-Phase1-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Action-Phase1-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [SetWeaponsToMaxRange:true]
+        [UseChatBroadcast:true]
+        [ChatData:${ModPrefix}-Chat-Phase1-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Chat-Phase1-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Chat]
+        [UseChat:true]
+        [StartsReady:true]
+        [Author:${Faction} Command]
+        [Color:Red]
+        [Channel:Chat]
+        [ChatMessages:Hostile target confirmed. All batteries, open fire!]
+        [BroadcastRandomly:true]
+      </Description>
+    </EntityComponent>
+
+    <!-- Phase 2: Heavy Damage -> Spawn Escort Wave -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Trigger-Phase2-HeavyDamage-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:Damage]
+        [DamageThreshold:20000]
+        [UseTrigger:true]
+        [StartsReady:true]
+        [MaxActions:1]
+        [Actions:${ModPrefix}-Action-Phase2-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Action-Phase2-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [SpawnEncounter:true]
+        [Spawner:${ModPrefix}-Spawner-EscortWave-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Spawner-EscortWave-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Spawn]
+        [UseSpawn:true]
+        [SpawningType:CustomSpawn]
+        [StartsReady:true]
+        [SpawnGroups:${ModPrefix}-SpawnGroup-EscortWave]
+        [MinDistance:200]
+        [MaxDistance:400]
+      </Description>
+    </EntityComponent>
+  </EntityComponents>
+"@)
+        Append-Footer
+    }
 }
 
 [System.IO.File]::WriteAllText($OutFile, $sb.ToString(), [System.Text.Encoding]::UTF8)
 Write-Host "Generated $Pattern profile at: $OutFile" -ForegroundColor Green
-

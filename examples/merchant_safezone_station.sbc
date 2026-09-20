@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <!--
+    Trade Operators Coalition (TOC) Pattern: Station Safezone & Wandering Merchant
+    Demonstrates [CreateSafeZone:true] with [MES SafeZone] profile and dual-trigger toggle networks
+    for wandering merchants stopping when friendly players approach.
+  -->
+  <EntityComponents>
+    <!-- ========================================== -->
+    <!-- 1. STATION SAFEZONE GENERATOR              -->
+    <!-- ========================================== -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>TOC-Trigger-CreateSafeZone</SubtypeId>
+      </Id>
+      <Description>
+        [MES AI Trigger]
+        [UseTrigger:true]
+        [Type:Session]
+        [StartsReady:true]
+        [MaxActions:1]
+        [Actions:TOC-Action-CreateSafeZone]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>TOC-Action-CreateSafeZone</SubtypeId>
+      </Id>
+      <Description>
+        [MES AI Action]
+        [CreateSafeZone:true]
+        [SafeZoneProfile:TOC-SafeZone-StoreZone]
+        [LinkSafeZoneToRemoteControl:true]
+        [SafeZonePositionGridCenter:true]
+        [SafeZonePositionTerrainSurface:true]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>TOC-SafeZone-StoreZone</SubtypeId>
+      </Id>
+      <Description>
+        [MES SafeZone]
+        [Shape:Sphere]
+        [Radius:500]
+        [RadiusFromParentEntity:true]
+        [Enabled:true]
+        [LinkToParentEntity:true]
+        [IsVisible:true]
+        [Color:{X:0 Y:128 Z:255}]
+        [Texture:SafeZone_Texture_Aura]
+        [AllowedActions:BuildingProjections]
+      </Description>
+    </EntityComponent>
+
+    <!-- ========================================== -->
+    <!-- 2. WANDERING MERCHANT INTERACTION          -->
+    <!-- ========================================== -->
+    <!-- Trigger: Stop When Friendly Player Approaches -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>TOC-Trigger-StopForPlayer</SubtypeId>
+      </Id>
+      <Description>
+        [MES AI Trigger]
+        [UseTrigger:true]
+        [Type:PlayerNear]
+        [TargetDistance:500]
+        [MinPlayerReputation:0]
+        [ToggleWithTriggerProfile:TOC-Trigger-ResumeCourse]
+        [ToggledProfileResetsCooldown:true]
+        [MinCooldownMs:2000]
+        [MaxCooldownMs:2001]
+        [StartsReady:false]
+        [MaxActions:-1]
+        [Actions:TOC-Action-StopForPlayer]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>TOC-Action-StopForPlayer</SubtypeId>
+      </Id>
+      <Description>
+        [MES AI Action]
+        [DisableAutopilot:true]
+        [StopAllRotation:true]
+        [StopAllThrust:true]
+        [UseChatBroadcast:true]
+        [ChatData:TOC-Chat-MerchantGreeting]
+      </Description>
+    </EntityComponent>
+
+    <!-- Trigger: Resume Course When Player Leaves (Beyond 600m) -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>TOC-Trigger-ResumeCourse</SubtypeId>
+      </Id>
+      <Description>
+        [MES AI Trigger]
+        [UseTrigger:false]
+        [Type:PlayerFar]
+        [TargetDistance:600]
+        [ToggleWithTriggerProfile:TOC-Trigger-StopForPlayer]
+        [ToggledProfileResetsCooldown:true]
+        [MinCooldownMs:2000]
+        [MaxCooldownMs:2001]
+        [StartsReady:false]
+        [MaxActions:-1]
+        [Actions:TOC-Action-ResumeCourse]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>TOC-Action-ResumeCourse</SubtypeId>
+      </Id>
+      <Description>
+        [MES AI Action]
+        [EnableAutopilot:true]
+        [StopAllRotation:false]
+        [StopAllThrust:false]
+      </Description>
+    </EntityComponent>
+
+    <!-- Chat: Merchant Greeting -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>TOC-Chat-MerchantGreeting</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Chat]
+        [UseChat:true]
+        [StartsReady:true]
+        [MaxChats:1]
+        [BroadcastRandomly:false]
+        [Author:TOC Wandering Merchant]
+        [Color:Green]
+        [ChatMessages:Greetings, {PlayerName}! Welcome aboard. Our trade terminals are open.]
+        [BroadcastType:Chat]
+      </Description>
+    </EntityComponent>
+  </EntityComponents>
+</Definitions>

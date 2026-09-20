@@ -1,16 +1,21 @@
 <#
 .SYNOPSIS
-    Advanced audit script for MES and RivalAI tag pitfalls, master gates, and list alignments.
+    Advanced semantic audit script for MES and RivalAI tags, master gates, and list alignments.
 .DESCRIPTION
     Scans .sbc files for:
-    1. Zero in CustomCountersTargets (zero-stripping bug).
-    2. WaypointNear/WaypointFar trigger types (fatal bounds check crash).
-    3. ChangeBlocksShareModeAll (broken loop index).
-    4. [CutVoxels:true] on SpawnConditions (does not exist in MES).
-    5. RivalAI vs MES Event Action tag mismatches ([Spawner:] vs [SpawnData:]).
-    6. Missing boolean master gates in MES Event Actions and Conditions.
-    7. List count mismatches on paired tags (SetCounters vs SetCountersAmount, etc.).
-    8. Invalid token usage (e.g. {Faction} inside MES Event Actions, tokens in [Actions:] profile names).
+    1. Zero-stripping bugs across all affected tags (CustomCountersTargets, CustomSandboxCountersTargets, etc.).
+    2. WaypointNear/WaypointFar trigger crash hazard.
+    3. ChangeBlocksShareModeAll loop index bug.
+    4. [CutVoxels:true] on Spawn Conditions (does not exist in MES).
+    5. Missing activation flags ([UseTrigger:true], [UseSpawn:true], [UseChat:true], [UseEvent:true], [UseConditions:true]).
+    6. Conflicting Autopilot flags (FlyLevelWithGravity + UseSurfaceHoverThrustMode).
+    7. Boolean formatting errors (True, TRUE, 1 instead of true).
+    8. RivalAI vs MES Event Action tag mismatches ([Spawner:] vs [SpawnData:], [Chat:] vs [ChatData:]).
+    9. ContainerType master gates and list count mismatches in [MES Manipulation].
+    10. ContainerType master gates and list count mismatches in [RivalAI Action].
+    11. Missing boolean master gates and list count mismatches in [MES Event Action].
+    12. Missing boolean master gates and list count mismatches in [MES Event Condition].
+    13. Invalid token usage ({Faction} inside MES Events, tokens in [Actions:] profile names).
 .PARAMETER Path
     Path to search for .sbc files. Defaults to current directory.
 #>
@@ -36,14 +41,16 @@ foreach ($file in $files) {
     $content = [System.IO.File]::ReadAllText($file.FullName)
     $lines = $content -split "`r?`n"
 
-    # Line-by-line quick checks
+    # Line-by-line checks
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $line = $lines[$i]
         $lineNum = $i + 1
 
-        # Check 1: Zero-stripping in CustomCountersTargets
-        if ($line -match '\[Custom(Sandbox)?CountersTargets:0\]' -or $line -match '\[Custom(Sandbox)?CountersTargets:.*,0(,|\])') {
-            Write-Host "[ERROR] $($file.Name):$lineNum - Zero in CustomCountersTargets will be stripped by TagIntListCheck! Use -1 with Greater/LessOrEqual." -ForegroundColor Red
+        # Check 1: Zero-stripping in all affected integer list tags
+        if ($line -match '\[Custom(Sandbox)?CountersTargets:0\]' -or $line -match '\[Custom(Sandbox)?CountersTargets:.*,0(,|\])' -or
+            $line -match '\[CustomZoneCounterValue:0\]' -or $line -match '\[CustomZoneCounterValue:.*,0(,|\])' -or
+            $line -match '\[(Increase|Decrease)CountersAmount:0\]' -or $line -match '\[(Increase|Decrease)CountersAmount:.*,0(,|\])') {
+            Write-Host "[ERROR] $($file.Name):$lineNum - Zero will be stripped by TagIntListCheck! Use -1 with Greater/LessOrEqual." -ForegroundColor Red
             $issuesFound++
         }
 
@@ -70,6 +77,18 @@ foreach ($file in $files) {
             Write-Host "[ERROR] $($file.Name):$lineNum - Dynamic tokens inside [Actions:] profile names fail to load! Action profile names resolve statically at startup." -ForegroundColor Red
             $issuesFound++
         }
+
+        # Check 6: Boolean formatting (case-sensitive check flagging True or TRUE)
+        if ($line -cmatch '\[([a-zA-Z0-9_]+):(True|TRUE)\]') {
+            $tName = $matches[1]
+            Write-Host "[WARN] $($file.Name):$lineNum - Tag [$tName] specifies capitalized boolean '$($matches[2])'. Use lowercase 'true'." -ForegroundColor Yellow
+            $issuesFound++
+        }
+
+        # Check 7: Debug tags in Action profiles (development diagnostic notice)
+        if ($line -match '\[(DebugMessage|DebugChatMessage|DebugHudMessage):.*\]') {
+            Write-Host "[WARN] $($file.Name):$lineNum - Debug tag [$($matches[1])] found. Ensure debug tags are removed before production release (do not use as substitute for NPC chat)." -ForegroundColor Yellow
+        }
     }
 
     # Profile block checks (inside <Description>)
@@ -77,7 +96,65 @@ foreach ($file in $files) {
     foreach ($dm in $descMatches) {
         $block = $dm.Groups[1].Value
 
-        # Check 6: MES Event Action Master Gates & Lists
+        # Check 7: Missing Activation Gates
+        if (($block -match '\[(RivalAI|MES AI) Trigger\]') -and ($block -notmatch '\[UseTrigger:true\]' -and $block -notmatch '\[UseTrigger:false\]')) {
+            Write-Host "[ERROR] $($file.Name) - [RivalAI Trigger] is missing required [UseTrigger:true] activation tag!" -ForegroundColor Red
+            $issuesFound++
+        }
+        if (($block -match '\[(RivalAI|MES AI) Spawn\]') -and ($block -notmatch '\[UseSpawn:true\]' -and $block -notmatch '\[UseSpawn:false\]')) {
+            Write-Host "[ERROR] $($file.Name) - [RivalAI Spawn] is missing required [UseSpawn:true] activation tag!" -ForegroundColor Red
+            $issuesFound++
+        }
+        if (($block -match '\[(RivalAI|MES AI) Chat\]') -and ($block -notmatch '\[UseChat:true\]' -and $block -notmatch '\[UseChat:false\]')) {
+            Write-Host "[ERROR] $($file.Name) - [RivalAI Chat] is missing required [UseChat:true] activation tag!" -ForegroundColor Red
+            $issuesFound++
+        }
+        if (($block -match '\[MES Event\]') -and ($block -notmatch '\[UseEvent:true\]' -and $block -notmatch '\[UseEvent:false\]')) {
+            Write-Host "[ERROR] $($file.Name) - [MES Event] is missing required [UseEvent:true] activation tag!" -ForegroundColor Red
+            $issuesFound++
+        }
+        if (($block -match '\[(RivalAI|MES AI) Condition\]') -and ($block -notmatch '\[UseConditions:true\]' -and $block -notmatch '\[UseConditions:false\]')) {
+            Write-Host "[ERROR] $($file.Name) - [RivalAI Condition] is missing required [UseConditions:true] activation tag!" -ForegroundColor Red
+            $issuesFound++
+        }
+
+        # Check 8: Autopilot Conflicts
+        if ($block -match '\[(RivalAI|MES AI) Autopilot\]') {
+            if ($block -match '\[FlyLevelWithGravity:true\]' -and $block -match '\[UseSurfaceHoverThrustMode:true\]') {
+                Write-Host "[ERROR] $($file.Name) - Autopilot declares both [FlyLevelWithGravity:true] and [UseSurfaceHoverThrustMode:true]! This causes severe physics oscillation." -ForegroundColor Red
+                $issuesFound++
+            }
+        }
+
+        # Check 9: MES Manipulation ContainerType Master Gates & Lists
+        if ($block -match '\[MES Manipulation\]') {
+            if (($block -match '\[ContainerTypeAssignBlockName:' -or $block -match '\[ContainerTypeAssignSubtypeId:') -and $block -notmatch '\[UseContainerTypeAssignment:true\]') {
+                Write-Host "[ERROR] $($file.Name) - ContainerType assignment tags specified in [MES Manipulation] without required [UseContainerTypeAssignment:true] master gate!" -ForegroundColor Red
+                $issuesFound++
+            }
+            $ctBlockNames = Get-TagValues $block 'ContainerTypeAssignBlockName'
+            $ctSubtypeIds = Get-TagValues $block 'ContainerTypeAssignSubtypeId'
+            if ($ctBlockNames.Count -ne $ctSubtypeIds.Count) {
+                Write-Host "[ERROR] $($file.Name) - ContainerTypeAssignBlockName count ($($ctBlockNames.Count)) does not match ContainerTypeAssignSubtypeId count ($($ctSubtypeIds.Count))! MES will silently drop all assignments." -ForegroundColor Red
+                $issuesFound++
+            }
+        }
+
+        # Check 10: RivalAI Action ContainerType Master Gates & Lists
+        if ($block -match '\[(RivalAI|MES AI) Action\]') {
+            if (($block -match '\[ContainerTypeBlockNames:' -or $block -match '\[ContainerTypeSubtypeIds:') -and $block -notmatch '\[ApplyContainerTypeToInventoryBlock:true\]') {
+                Write-Host "[ERROR] $($file.Name) - ContainerType tags specified in [RivalAI Action] without required [ApplyContainerTypeToInventoryBlock:true] master gate!" -ForegroundColor Red
+                $issuesFound++
+            }
+            $actCtBlocks = Get-TagValues $block 'ContainerTypeBlockNames'
+            $actCtSubtypes = Get-TagValues $block 'ContainerTypeSubtypeIds'
+            if ($actCtBlocks.Count -ne $actCtSubtypes.Count) {
+                Write-Host "[ERROR] $($file.Name) - ContainerTypeBlockNames count ($($actCtBlocks.Count)) does not match ContainerTypeSubtypeIds count ($($actCtSubtypes.Count))!" -ForegroundColor Red
+                $issuesFound++
+            }
+        }
+
+        # Check 11: MES Event Action Master Gates & Lists
         if ($block -match '\[MES Event Action\]') {
             if ($block -match '\[Spawner:') {
                 Write-Host "[ERROR] $($file.Name) - [Spawner:] tag does not work in MES Event Actions! Use [SpawnData:] instead." -ForegroundColor Red
@@ -92,25 +169,29 @@ foreach ($file in $files) {
                 $issuesFound++
             }
 
-            # Master Gate: ChangeCounters
+            # Master Gates
             if (($block -match '\[(Set|Increase|Decrease)Counters:' -or $block -match '\[(Set|Increase|Decrease)CountersAmount:') -and $block -notmatch '\[ChangeCounters:true\]') {
                 Write-Host "[ERROR] $($file.Name) - Counter tags specified in [MES Event Action] without required [ChangeCounters:true] master gate!" -ForegroundColor Red
                 $issuesFound++
             }
-
-            # Master Gate: ChangeBooleans
             if ($block -match '\[SetBooleans(True|False):' -and $block -notmatch '\[ChangeBooleans:true\]') {
                 Write-Host "[ERROR] $($file.Name) - Boolean tags specified in [MES Event Action] without required [ChangeBooleans:true] master gate!" -ForegroundColor Red
                 $issuesFound++
             }
-
-            # Master Gate: SpawnEncounter
             if (($block -match '\[Spawn(Data|Coords|FactionTags):') -and $block -notmatch '\[SpawnEncounter:true\]') {
                 Write-Host "[ERROR] $($file.Name) - Spawner tags specified in [MES Event Action] without required [SpawnEncounter:true] master gate!" -ForegroundColor Red
                 $issuesFound++
             }
+            if ($block -match '\[Zone(Names|RadiusChangeTypes|RadiusChangeAmounts):' -and $block -notmatch '\[ChangeZoneByName:true\]') {
+                Write-Host "[ERROR] $($file.Name) - Zone modification tags specified in [MES Event Action] without required [ChangeZoneByName:true] master gate!" -ForegroundColor Red
+                $issuesFound++
+            }
+            if ($block -match '\[ToggleEvent(Ids|IdModes|Tags|TagModes):' -and $block -notmatch '\[ToggleEvents:true\]') {
+                Write-Host "[ERROR] $($file.Name) - ToggleEvent tags specified in [MES Event Action] without required [ToggleEvents:true] master gate!" -ForegroundColor Red
+                $issuesFound++
+            }
 
-            # List Alignment Checks
+            # List Alignments
             $setNames = Get-TagValues $block 'SetCounters'
             $setAmts = Get-TagValues $block 'SetCountersAmount'
             if ($setNames.Count -ne $setAmts.Count) {
@@ -143,7 +224,7 @@ foreach ($file in $files) {
             }
         }
 
-        # Check 7: MES Event Condition Master Gates & Lists
+        # Check 12: MES Event Condition Master Gates & Lists
         if ($block -match '\[MES Event Condition\]') {
             if ($block -match '\[CustomCounters:' -and $block -notmatch '\[CheckCustomCounters:true\]') {
                 Write-Host "[ERROR] $($file.Name) - [CustomCounters:] specified in [MES Event Condition] without [CheckCustomCounters:true] master gate!" -ForegroundColor Red
@@ -158,7 +239,6 @@ foreach ($file in $files) {
                 $issuesFound++
             }
 
-            # List Alignment: CustomCounters vs Targets
             $cNames = Get-TagValues $block 'CustomCounters'
             $cTargets = Get-TagValues $block 'CustomCountersTargets'
             if ($cNames.Count -ne $cTargets.Count) {
@@ -166,22 +246,14 @@ foreach ($file in $files) {
                 $issuesFound++
             }
         }
-
-        # Check 8: ActionExecution:Condition List Alignment (MES Events)
-        if ($block -match '\[ActionExecution\s*:\s*Condition\]') {
-            $condIds = Get-TagValues $block 'ConditionIds'
-            $actIds = Get-TagValues $block 'ActionIds'
-            if ($condIds.Count -ne $actIds.Count) {
-                Write-Host "[ERROR] $($file.Name) - [ActionExecution:Condition] requires strictly equal ConditionIds ($($condIds.Count)) and ActionIds ($($actIds.Count)) counts!" -ForegroundColor Red
-                $issuesFound++
-            }
-        }
     }
 }
 
+Write-Host ""
 if ($issuesFound -eq 0) {
-    Write-Host "MES Tag Audit Passed: No known tag hazards, master gate omissions, or list mismatches detected." -ForegroundColor Green
+    Write-Host "MES Tag Audit Passed: No tag hazards, master gate omissions, or list mismatches detected." -ForegroundColor Green
+    exit 0
 } else {
-    Write-Host "MES Tag Audit Completed: $issuesFound issues/warnings flagged." -ForegroundColor Red
+    Write-Host "MES Tag Audit Completed: $issuesFound issue(s)/warning(s) flagged." -ForegroundColor Red
     exit 1
 }

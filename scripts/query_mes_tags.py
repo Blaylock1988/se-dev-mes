@@ -1,37 +1,66 @@
 #!/usr/bin/env python3
 """
-query_mes_tags.py — Fast tag and profile query CLI for Modular Encounters Systems (MES).
-Searches the local MES source code tag dictionaries to display valid tags, profile types,
-expected data types, and source locations.
+query_mes_tags.py — High-Performance Tag and Profile Query CLI for MES & RivalAI.
+Searches the local MES source code or offline tag cache (mes_tag_cache.json) to display
+valid tags, profile types, expected data types, and source locations.
 
 Usage:
   python query_mes_tags.py --tag "ChangeZone"
-  python query_mes_tags.py --profile "Action"
+  python query_mes_tags.py --profile "Autopilot"
   python query_mes_tags.py --tag "Counters" --profile "Event"
+  python query_mes_tags.py --rebuild-cache
 """
 
 import os
 import sys
 import re
+import json
+import hashlib
 import argparse
+from datetime import datetime, timezone
 
-DEFAULT_MES_PATH = os.path.expandvars(
-    r'%AppData%\SpaceEngineers\Mods\Modular-Encounters-Systems\Data\Scripts\ModularEncountersSystems'
-)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CACHE_FILE = os.path.join(SCRIPT_DIR, "mes_tag_cache.json")
+
+CANDIDATE_PATHS = [
+    os.path.expandvars(r'%AppData%\SpaceEngineers\Mods\Modular-Encounters-Systems\Data\Scripts\ModularEncountersSystems'),
+    r'C:\Program Files (x86)\Steam\steamapps\workshop\content\244850\1521905890\Data\Scripts\ModularEncountersSystems',
+    os.path.expandvars(r'%UserProfile%\AppData\Roaming\SpaceEngineers\Mods\Modular-Encounters-Systems\Data\Scripts\ModularEncountersSystems'),
+]
 
 PROFILE_FILES = {
-    'RivalAI Action': 'ActionReferenceProfile.cs',
-    'RivalAI Condition': 'ConditionReferenceProfile.cs',
-    'RivalAI Trigger': 'TriggerProfile.cs',
-    'RivalAI Autopilot': 'AutoPilotProfile.cs',
-    'RivalAI Target': 'TargetProfile.cs',
-    'RivalAI Chat': 'ChatProfile.cs',
-    'RivalAI Spawn': 'SpawnProfile.cs',
-    'MES Event Action': 'EventActionReference.cs',
-    'MES Event Condition': 'EventConditions.cs',
-    'MES Spawn Conditions': 'SpawnConditionsProfile.cs',
-    'MES Manipulation': 'ManipulationProfile.cs',
-    'MES Zone': 'Zone.cs',
+    'RivalAI Action': ['ActionReferenceProfile.cs', 'ActionProfile.cs'],
+    'RivalAI Condition': ['ConditionReferenceProfile.cs', 'ConditionProfile.cs'],
+    'RivalAI Trigger': ['TriggerProfile.cs'],
+    'RivalAI TriggerGroup': ['TriggerGroupProfile.cs'],
+    'RivalAI Autopilot': ['AutoPilotProfile.cs'],
+    'RivalAI Target': ['TargetProfile.cs'],
+    'RivalAI Chat': ['ChatProfile.cs'],
+    'RivalAI Spawn': ['SpawnProfile.cs'],
+    'RivalAI Command': ['CommandProfile.cs'],
+    'RivalAI Waypoint': ['WaypointProfile.cs'],
+    'RivalAI Weapon System': ['WeaponSystemReference.cs'],
+    'MES Event Action': ['EventActionReference.cs', 'EventActionProfile.cs'],
+    'MES Event Condition': ['EventConditions.cs', 'EventCondition.cs'],
+    'MES Event': ['EventProfile.cs'],
+    'MES Event Group': ['EventGroupProfile.cs'],
+    'MES Spawn Conditions': ['SpawnConditionsProfile.cs'],
+    'MES Manipulation': ['ManipulationProfile.cs'],
+    'MES Block Replacement': ['BlockReplacementProfile.cs'],
+    'MES Dereliction': ['DerelictionProfile.cs'],
+    'MES Bot Spawn': ['BotSpawnProfile.cs'],
+    'MES Replenishment': ['ReplenishmentProfile.cs'],
+    'MES Loot': ['LootProfile.cs'],
+    'MES Store': ['StoreProfile.cs'],
+    'MES SafeZone': ['SafeZoneProfile.cs'],
+    'MES Zone': ['Zone.cs'],
+    'MES Zone Conditions': ['ZoneConditionsProfile.cs'],
+    'MES Player Condition': ['PlayerConditionProfile.cs', 'PlayerCondition.cs'],
+    'MES Weapon Mod Rules': ['WeaponModRulesProfile.cs'],
+    'MES Mission': ['MissionProfile.cs'],
+    'MES Contract Block': ['ContractBlockProfile.cs'],
+    'MES Suit Upgrades': ['SuitUpgradesProfile.cs'],
+    'MES Prefab Data': ['PrefabDataProfile.cs'],
 }
 
 TYPE_MAP = {
@@ -52,13 +81,23 @@ TYPE_MAP = {
     'CustomTagParse': 'custom / block parse',
 }
 
+def detect_mes_path():
+    for path in CANDIDATE_PATHS:
+        if os.path.isdir(path):
+            return path
+    return None
+
 def find_mes_files(mes_path):
     file_map = {}
     for root, _, files in os.walk(mes_path):
         for f in files:
-            for ptype, target in PROFILE_FILES.items():
-                if f.lower() == target.lower():
-                    file_map[ptype] = os.path.join(root, f)
+            f_lower = f.lower()
+            for ptype, target_files in PROFILE_FILES.items():
+                for target in target_files:
+                    if f_lower == target.lower():
+                        if ptype not in file_map:
+                            file_map[ptype] = []
+                        file_map[ptype].append(os.path.join(root, f))
     return file_map
 
 def parse_tags_from_file(file_path):
@@ -70,7 +109,7 @@ def parse_tags_from_file(file_path):
         lines = fp.read().splitlines()
 
     for idx, line in enumerate(lines, 1):
-        # Match dictionary pattern: {"TagName", (s, o) => TagParse.TagTypeCheck(s, ref Var) }
+        # Pattern 1: Dictionary entry: {"TagName", (s, o) => TagParse.TagTypeCheck(s, ref Var) }
         m_dict = re.search(r'\{\s*"([^"]+)"\s*,\s*\([^)]*\)\s*=>\s*TagParse\.(\w+)\(', line)
         if m_dict:
             tag_name = m_dict.group(1)
@@ -79,57 +118,166 @@ def parse_tags_from_file(file_path):
             tags.append((tag_name, data_type, idx))
             continue
 
-        # Match legacy / custom pattern: if (tag.StartsWith("[TagName:")
+        # Pattern 2: Dictionary entry with direct assignment or other helper
+        m_dict2 = re.search(r'\{\s*"([^"]+)"\s*,\s*\([^)]*\)\s*=>', line)
+        if m_dict2:
+            tag_name = m_dict2.group(1)
+            # Try to infer type
+            if 'bool' in line.lower() or 'true' in line.lower() or 'false' in line.lower():
+                dtype = 'bool (true/false)'
+            elif 'list' in line.lower():
+                dtype = 'List<string>'
+            elif 'convert.to' in line.lower():
+                dtype = 'numeric / enum'
+            else:
+                dtype = 'custom parse'
+            tags.append((tag_name, dtype, idx))
+            continue
+
+        # Pattern 3: tag.StartsWith("[TagName:") or tag.Contains("[TagName:")
         m_start = re.search(r'tag\.(?:StartsWith|Contains)\("\[([a-zA-Z0-9_]+):"', line)
         if m_start:
             tag_name = m_start.group(1)
-            tags.append((tag_name, 'custom / legacy', idx))
+            tags.append((tag_name, 'custom / block parse', idx))
 
     return tags
 
+def compute_dir_hash(path):
+    hasher = hashlib.sha256()
+    for root, _, files in sorted(os.walk(path)):
+        for f in sorted(files):
+            if f.endswith('.cs'):
+                fpath = os.path.join(root, f)
+                hasher.update(f.encode('utf-8'))
+                try:
+                    with open(fpath, 'rb') as fp:
+                        hasher.update(fp.read())
+                except Exception:
+                    pass
+    return hasher.hexdigest()[:16]
+
+def build_cache(mes_path):
+    print(f"Scanning MES source at: {mes_path}")
+    file_map = find_mes_files(mes_path)
+    all_tags = []
+    seen = set()
+
+    for ptype, fpaths in sorted(file_map.items()):
+        for fpath in fpaths:
+            parsed = parse_tags_from_file(fpath)
+            for tag_name, dtype, line_no in parsed:
+                key = (ptype, tag_name.lower())
+                if key in seen:
+                    continue
+                seen.add(key)
+                all_tags.append({
+                    'profile': ptype,
+                    'tag': tag_name,
+                    'type': dtype,
+                    'file': os.path.basename(fpath),
+                    'line': line_no
+                })
+
+    cache_data = {
+        'metadata': {
+            'generated_at': datetime.now(timezone.utc).isoformat(),
+            'mes_path': mes_path,
+            'source_hash': compute_dir_hash(mes_path),
+            'total_tags': len(all_tags),
+            'total_profiles': len(file_map)
+        },
+        'tags': all_tags
+    }
+
+    with open(CACHE_FILE, 'w', encoding='utf-8') as fp:
+        json.dump(cache_data, fp, indent=2)
+
+    print(f"Successfully cached {len(all_tags)} tags across {len(file_map)} profiles to: {CACHE_FILE}")
+    return cache_data
+
+def load_cache():
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'r', encoding='utf-8') as fp:
+                return json.load(fp)
+        except Exception:
+            return None
+    return None
+
 def main():
-    parser = argparse.ArgumentParser(description='Query MES tags and profile configurations from local MES source.')
+    parser = argparse.ArgumentParser(description='Query MES tags and profile configurations from MES source or offline cache.')
     parser.add_argument('-t', '--tag', help='Filter by tag name substring (case-insensitive)')
-    parser.add_argument('-p', '--profile', help='Filter by profile type substring (e.g. Action, Condition, Event, Zone)')
+    parser.add_argument('-p', '--profile', help='Filter by profile type substring (e.g. Action, Condition, Event, Zone, Autopilot)')
     parser.add_argument('-e', '--exact', action='store_true', help='Exact tag name match')
-    parser.add_argument('--path', default=DEFAULT_MES_PATH, help='Path to MES source code')
+    parser.add_argument('--path', help='Path to MES source code')
+    parser.add_argument('--rebuild-cache', action='store_true', help='Rebuild offline tag cache from MES source')
+    parser.add_argument('--json', action='store_true', help='Output results as JSON (token-lean for agent scripts)')
     args = parser.parse_args()
 
-    if not os.path.isdir(args.path):
-        print(f"[ERROR] MES source path not found at: {args.path}")
-        print("Please specify --path pointing to your local MES install.")
-        sys.exit(1)
+    mes_path = args.path or detect_mes_path()
 
-    file_map = find_mes_files(args.path)
+    if args.rebuild_cache:
+        if not mes_path or not os.path.isdir(mes_path):
+            print("[ERROR] Cannot rebuild cache: No valid MES source path found.")
+            sys.exit(1)
+        build_cache(mes_path)
+        return
+
+    cache = load_cache()
+
+    if not cache:
+        if mes_path and os.path.isdir(mes_path):
+            cache = build_cache(mes_path)
+        else:
+            print("[ERROR] No offline cache found and no MES source directory detected.")
+            print("Please specify --path to your MES source code to generate the initial cache.")
+            sys.exit(1)
+
+    tags = cache.get('tags', [])
     results = []
 
-    for ptype, fpath in sorted(file_map.items()):
+    for item in tags:
+        ptype = item['profile']
+        tname = item['tag']
+        dtype = item['type']
+        fname = item['file']
+        line = item['line']
+
         if args.profile and args.profile.lower() not in ptype.lower():
             continue
-        parsed = parse_tags_from_file(fpath)
-        for tag_name, dtype, line_no in parsed:
-            if args.tag:
-                if args.exact:
-                    if args.tag.lower() != tag_name.lower():
-                        continue
-                else:
-                    if args.tag.lower() not in tag_name.lower():
-                        continue
-            results.append((ptype, tag_name, dtype, os.path.basename(fpath), line_no))
+
+        if args.tag:
+            if args.exact:
+                if args.tag.lower() != tname.lower():
+                    continue
+            else:
+                if args.tag.lower() not in tname.lower():
+                    continue
+
+        results.append(item)
+
+    if args.json:
+        print(json.dumps(results, indent=2))
+        return
 
     if not results:
         print("No matching tags found.")
         return
 
-    print(f"\nFound {len(results)} matching tag(s):\n")
-    print(f"{'Profile Type':<22} | {'Tag Name':<35} | {'Expected Data Type':<30} | Source Location")
-    print("-" * 115)
+    print(f"\nFound {len(results)} matching tag(s) (Cache: {cache.get('metadata', {}).get('source_hash', 'unknown')}):\n")
+    print(f"{'Profile Type':<24} | {'Tag Name':<38} | {'Expected Data Type':<30} | Source")
+    print("-" * 120)
 
-    for ptype, tag_name, dtype, fname, line_no in results:
-        print(f"{ptype:<22} | [{tag_name}:...]{' ' * max(0, 27 - len(tag_name))} | {dtype:<30} | {fname}:{line_no}")
+    for item in results:
+        ptype = item['profile']
+        tname = item['tag']
+        dtype = item['type']
+        fname = item['file']
+        line = item['line']
+        tag_str = f"[{tname}:...]"
+        print(f"{ptype:<24} | {tag_str:<38} | {dtype:<30} | {fname}:{line}")
 
     print()
 
 if __name__ == '__main__':
     main()
-

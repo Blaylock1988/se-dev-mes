@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <!--
+    Enenra's GFA Pattern: Parent-Child Courier Logistics Network
+    A static parent station summons a dynamic courier grid, transmits exchange coordinates,
+    and the courier navigates to the station, drops speed/altitude, loads resources, and retreats.
+  -->
+  <EntityComponents>
+    <!-- Courier Behavior -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GFA-Behavior-Courier</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Behavior]
+        [BehaviorName:CargoShip]
+        [AutopilotData:GFA-Autopilot-Courier]
+        [TriggerGroups:GFA-TriggerGroup-Courier]
+      </Description>
+    </EntityComponent>
+
+    <!-- Courier Autopilot -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GFA-Autopilot-Courier</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Autopilot]
+        [IdealMinSpeed:25]
+        [IdealMaxSpeed:50]
+        [FlyLevelWithGravity:true]
+        [MinimumPlanetAltitude:100]
+        [WaypointTolerance:50]
+        [SlowDownOnWaypointApproach:true]
+        [ExtraSlowDownDistance:150]
+      </Description>
+    </EntityComponent>
+
+    <!-- Courier TriggerGroup -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GFA-TriggerGroup-Courier</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI TriggerGroup]
+        [Triggers:GFA-Trigger-ReceiveTarget]
+        [Triggers:GFA-Trigger-PrepareForLanding]
+        [Triggers:GFA-Trigger-ArriveTarget]
+        [Triggers:GFA-Trigger-LeaveTarget]
+      </Description>
+    </EntityComponent>
+
+    <!-- Trigger: Receive Target from Parent Station -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GFA-Trigger-ReceiveTarget</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:CommandReceived]
+        [CommandReceiveCode:GFA_ExchangePoint]
+        [UseTrigger:true]
+        [StartsReady:false]
+        [Conditions:GFA-Condition-ReceiveTarget]
+        [MaxActions:1]
+        [Actions:GFA-Action-ReceiveTarget]
+      </Description>
+    </EntityComponent>
+
+    <!-- Condition: Validate Command is From Parent -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GFA-Condition-ReceiveTarget</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Condition]
+        [UseConditions:true]
+        [MatchAnyCondition:false]
+        [CommandCheckFromParent:true]
+        [CommandFromParent:true]
+      </Description>
+    </EntityComponent>
+
+    <!-- Action: Set Waypoint to Station Coordinates -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GFA-Action-ReceiveTarget</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [AddWaypointFromCommand:true]
+        [EnableTriggers:true]
+        [EnableTriggerNames:GFA-Trigger-PrepareForLanding]
+        [EnableTriggerNames:GFA-Trigger-ArriveTarget]
+      </Description>
+    </EntityComponent>
+
+    <!-- Trigger: Prepare for Landing (Within 1500m) -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GFA-Trigger-PrepareForLanding</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:PlayerNear]
+        [TargetDistance:1500]
+        [UseTrigger:false]
+        [StartsReady:false]
+        [MaxActions:1]
+        [Actions:GFA-Action-PrepareForLanding]
+      </Description>
+    </EntityComponent>
+
+    <!-- Action: Reduce Speed & Altitude for Touchdown -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GFA-Action-PrepareForLanding</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [ChangeAutopilotMinAltitude:true]
+        [NewAutopilotMinAltitude:15]
+        [ChangeAutopilotSpeed:true]
+        [NewAutopilotSpeed:15]
+      </Description>
+    </EntityComponent>
+
+    <!-- Trigger: Arrive at Target Pad -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GFA-Trigger-ArriveTarget</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:BehaviorTriggerA]
+        [UseTrigger:false]
+        [StartsReady:false]
+        [MaxActions:1]
+        [Actions:GFA-Action-ArriveTarget]
+      </Description>
+    </EntityComponent>
+
+    <!-- Action: Stop Movement & Begin Transfer -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GFA-Action-ArriveTarget</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [DisableAutopilot:true]
+        [StopAllRotation:true]
+        [StopAllThrust:true]
+        [SetAntennaThoughtBubble:true]
+        [SetAntennaThoughtBubbleName:Loading]
+        [EnableTriggers:true]
+        [EnableTriggerNames:GFA-Trigger-LeaveTarget]
+        [ResetCooldownTimeOfTriggers:true]
+        [ResetTriggerCooldownNames:GFA-Trigger-LeaveTarget]
+      </Description>
+    </EntityComponent>
+
+    <!-- Trigger: Depart After 3 Minutes -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GFA-Trigger-LeaveTarget</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:Timer]
+        [UseTrigger:false]
+        [StartsReady:false]
+        [MinCooldownMs:180000]
+        [MaxCooldownMs:180001]
+        [MaxActions:1]
+        [Actions:GFA-Action-LeaveTarget]
+      </Description>
+    </EntityComponent>
+
+    <!-- Action: Restore Autopilot Defaults (-1) & Retreat -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GFA-Action-LeaveTarget</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [EnableAutopilot:true]
+        [StopAllRotation:false]
+        [StopAllThrust:false]
+        [ChangeAutopilotMinAltitude:true]
+        [NewAutopilotMinAltitude:-1]
+        [ChangeAutopilotSpeed:true]
+        [NewAutopilotSpeed:-1]
+        [ClearAntennaThoughtBubble:true]
+        [Retreat:true]
+      </Description>
+    </EntityComponent>
+  </EntityComponents>
+</Definitions>

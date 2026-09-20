@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <!--
+    Community Implementation Example: Dynamic State Machine (from mes-shared-behaviors)
+    NOTE: "Role" and "CombatType" in this file are user-defined naming conventions for CustomStrings.
+    They are NOT native MES tags. The actual native MES engine features doing the work are:
+    [ChangeBehaviorSubclass:true], [ChangeAutopilotProfile:true], and [EnableTriggerTags/DisableTriggerTags].
+  -->
+  <EntityComponents>
+    <!-- Behavior Root -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>MSB-Behavior-PatrolFighter</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Behavior]
+        [BehaviorName:CargoShip]
+        [AutopilotData:MSB-Autopilot-Role-Patrol]
+        [SecondaryAutopilotData:MSB-Autopilot-Combat-Fighter]
+        [TargetData:MSB-Target-Fighter]
+        [TriggerGroups:MSB-TriggerGroup-Role-Patrol]
+        [TriggerGroups:MSB-TriggerGroup-Combat-Fighter]
+      </Description>
+    </EntityComponent>
+
+    <!-- Out-of-Combat Autopilot (Role: Patrol) -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>MSB-Autopilot-Role-Patrol</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Autopilot]
+        [IdealMinSpeed:25]
+        [IdealMaxSpeed:45]
+        [FlyLevelWithGravity:true]
+        [WaypointTolerance:50]
+        [MinimumPlanetAltitude:100]
+      </Description>
+    </EntityComponent>
+
+    <!-- In-Combat Autopilot (CombatType: Fighter) -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>MSB-Autopilot-Combat-Fighter</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Autopilot]
+        [IdealMinSpeed:55]
+        [IdealMaxSpeed:95]
+        [FlyLevelWithGravity:false]
+        [UseVelocityCollisionEvasion:true]
+        [AllowStrafing:true]
+        [StrafeMinDurationMs:3000]
+        [StrafeMaxDurationMs:6000]
+        [UseProjectileLeadPrediction:true]
+        [StrikeBeginPlanetAttackRunDistance:600]
+        [StrikeBreakawayDistance:100]
+        [BarrelRollMinDurationMs:2000]
+        [BarrelRollMaxDurationMs:3000]
+      </Description>
+    </EntityComponent>
+
+    <!-- Target Profile -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>MSB-Target-Fighter</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Target]
+        [UsePriorities:true]
+        [TargetRules:Grid]
+        [MaxDistance:3500]
+        [MatchAllFilters:Relation]
+        [MatchAllFilters:Powered]
+        [PrioritizeTargetSubsystems:true]
+        [TargetSubsystems:Weapons]
+        [TargetSubsystems:Thrust]
+      </Description>
+    </EntityComponent>
+
+    <!-- TriggerGroup: Role (Patrol) -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>MSB-TriggerGroup-Role-Patrol</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI TriggerGroup]
+        [Triggers:MSB-Trigger-EnterCombat]
+      </Description>
+    </EntityComponent>
+
+    <!-- Trigger: Enter Combat on Target Near or Damage -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>MSB-Trigger-EnterCombat</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:TargetNear]
+        [TargetDistance:2500]
+        [UseTrigger:true]
+        [StartsReady:true]
+        [Actions:MSB-Action-EnterCombat]
+      </Description>
+    </EntityComponent>
+
+    <!-- Action: Switch to CombatType Fighter -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>MSB-Action-EnterCombat</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [ChangeBehaviorSubclass:true]
+        [NewBehaviorSubclass:Fighter]
+        [ChangeAutopilotProfile:true]
+        [AutopilotProfile:Secondary]
+        [SetWeaponsToMaxRange:true]
+        [DisableTriggerNames:MSB-Trigger-EnterCombat]
+        [EnableTriggerNames:MSB-Trigger-ExitCombat]
+      </Description>
+    </EntityComponent>
+
+    <!-- TriggerGroup: CombatType (Fighter) -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>MSB-TriggerGroup-Combat-Fighter</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI TriggerGroup]
+        [Triggers:MSB-Trigger-ExitCombat]
+      </Description>
+    </EntityComponent>
+
+    <!-- Trigger: Exit Combat when Target Lost -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>MSB-Trigger-ExitCombat</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Trigger]
+        [Type:NoTargetCheck]
+        [UseTrigger:false]
+        [StartsReady:false]
+        [MinCooldownMs:15000]
+        [MaxCooldownMs:15001]
+        [Actions:MSB-Action-ExitCombat]
+      </Description>
+    </EntityComponent>
+
+    <!-- Action: Return to Role Patrol -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>MSB-Action-ExitCombat</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Action]
+        [ChangeBehaviorSubclass:true]
+        [NewBehaviorSubclass:CargoShip]
+        [ChangeAutopilotProfile:true]
+        [AutopilotProfile:Primary]
+        [DisableTriggerNames:MSB-Trigger-ExitCombat]
+        [EnableTriggerNames:MSB-Trigger-EnterCombat]
+      </Description>
+    </EntityComponent>
+  </EntityComponents>
+</Definitions>

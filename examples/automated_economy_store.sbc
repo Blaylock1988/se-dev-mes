@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <!--
+    Mike Dude's GVK Pattern: Automated Economy Store Refresh
+    Refreshes store block inventories on a timer, clearing old stock and re-applying store profiles.
+    Includes the required Builder subtype declaration snippet for FactionTypes_Economy.sbc.
+  -->
+
+  <!-- 1. Vanilla StoreItem Definition -->
+  <StoreItems>
+    <StoreItem>
+      <Id>
+        <TypeId>MyObjectBuilder_StoreItemDefinition</TypeId>
+        <SubtypeId>GVK-StoreItem-RoverHeavy</SubtypeId>
+      </Id>
+      <ItemType>Prefab</ItemType>
+      <ItemPrefabName>GVK-Prefab-RoverHeavy</ItemPrefabName>
+      <PricePerUnit>7500000</PricePerUnit>
+      <Amount>1</Amount>
+    </StoreItem>
+  </StoreItems>
+
+  <EntityComponents>
+    <!-- 2. MES Store Profile -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-StoreProfile-Rovers</SubtypeId>
+      </Id>
+      <Description>
+        [MES Store]
+        [StoreItems:GVK-StoreItem-RoverHeavy]
+      </Description>
+    </EntityComponent>
+
+    <!-- 3. Station Behavior: Passive Trade Station with Store Refresher -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Behavior-TradeStation</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Behavior]
+        [BehaviorName:Passive]
+        [UseRetreatTimer:false]
+        [UseNoTargetTimer:false]
+        [UsePlayerDistanceTimer:false]
+        [Triggers:GVK-Trigger-RefreshStores]
+      </Description>
+    </EntityComponent>
+
+    <!-- 4. Trigger: Periodic Store Refresh (Every 60 Seconds) -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Trigger-RefreshStores</SubtypeId>
+      </Id>
+      <Description>
+        [MES AI Trigger]
+        [UseTrigger:true]
+        [Type:Timer]
+        [MinCooldownMs:60000]
+        [MaxCooldownMs:60001]
+        [StartsReady:true]
+        [MaxActions:-1]
+        [Actions:GVK-Action-RefreshStores]
+      </Description>
+    </EntityComponent>
+
+    <!-- 5. Action: Clear & Re-apply Store Profiles -->
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>GVK-Action-RefreshStores</SubtypeId>
+      </Id>
+      <Description>
+        [MES AI Action]
+        [ApplyStoreProfiles:true]
+        [ClearStoreContentsFirst:true]
+        [StoreBlocks:Store-Rovers]
+        [StoreProfiles:GVK-StoreProfile-Rovers]
+      </Description>
+    </EntityComponent>
+  </EntityComponents>
+
+  <!--
+    CRITICAL ENGINE REQUIREMENT:
+    Ensure the following is placed in your FactionTypes_Economy.sbc:
+    
+    <FactionType>
+      <Id>
+        <TypeId>FactionTypeDefinition</TypeId>
+        <SubtypeId>Builder</SubtypeId>
+      </Id>
+      <GridsForSale>
+        <PrefabSubtypeId>GVK-Prefab-RoverHeavy</PrefabSubtypeId>
+      </GridsForSale>
+    </FactionType>
+  -->
+</Definitions>

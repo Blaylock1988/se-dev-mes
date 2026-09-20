@@ -31,6 +31,7 @@
 param(
     [string]$Path = ".",
     [switch]$IncludePrefabs = $true,
+    [switch]$SkipPrefabs = $false,
     [switch]$WarnOrphans = $false
 )
 
@@ -132,10 +133,15 @@ foreach ($file in $sbcFiles) {
         # Remote Control / Behavior references
         Register-Reference (Parse-CsvTags $block 'Triggers') $file 0 "Trigger"
         Register-Reference (Parse-CsvTags $block 'TriggerGroups') $file 0 "TriggerGroup"
+        Register-Reference (Parse-CsvTags $block 'AutopilotData') $file 0 "Autopilot"
+        Register-Reference (Parse-CsvTags $block 'SecondaryAutopilotData') $file 0 "Autopilot"
+        Register-Reference (Parse-CsvTags $block 'TargetData') $file 0 "Target"
+        Register-Reference (Parse-CsvTags $block 'WeaponProfiles') $file 0 "WeaponSystem"
 
         # Trigger references
         Register-Reference (Parse-CsvTags $block 'Conditions') $file 0 "Condition"
         Register-Reference (Parse-CsvTags $block 'Actions') $file 0 "Action"
+        Register-Reference (Parse-CsvTags $block 'ToggleWithTriggerProfile') $file 0 "Trigger"
 
         # Action references
         Register-Reference (Parse-CsvTags $block 'Spawner') $file 0 "Spawner"
@@ -145,12 +151,23 @@ foreach ($file in $sbcFiles) {
         Register-Reference (Parse-CsvTags $block 'CommandProfileIds') $file 0 "CommandProfile"
         Register-Reference (Parse-CsvTags $block 'ToggleEventIds') $file 0 "ToggleEvent"
         Register-Reference (Parse-CsvTags $block 'ResetEventCooldownIds') $file 0 "ResetEvent"
+        Register-Reference (Parse-CsvTags $block 'SafeZoneProfile') $file 0 "SafeZone"
+        Register-Reference (Parse-CsvTags $block 'StoreProfiles') $file 0 "Store"
 
         # Spawner references
         Register-Reference (Parse-CsvTags $block 'SpawnGroups') $file 0 "SpawnGroup"
 
-        # SpawnGroup references
+        # SpawnGroup & Manipulation references
         Register-Reference (Parse-CsvTags $block 'SpawnConditionsProfiles') $file 0 "SpawnCondition"
+        Register-Reference (Parse-CsvTags $block 'DerelictionProfiles') $file 0 "Dereliction"
+        Register-Reference (Parse-CsvTags $block 'ManipulationProfiles') $file 0 "Manipulation"
+        Register-Reference (Parse-CsvTags $block 'BlockReplacementProfiles') $file 0 "BlockReplacement"
+        Register-Reference (Parse-CsvTags $block 'LootProfiles') $file 0 "Loot"
+        Register-Reference (Parse-CsvTags $block 'LootGroups') $file 0 "LootGroup"
+        Register-Reference (Parse-CsvTags $block 'ReplenishProfiles') $file 0 "Replenishment"
+
+        # Store references
+        Register-Reference (Parse-CsvTags $block 'StoreItems') $file 0 "StoreItem"
 
         # Event references
         Register-Reference (Parse-CsvTags $block 'ConditionIds') $file 0 "EventCondition"
@@ -173,7 +190,8 @@ foreach ($ref in $references) {
     $refLower = $refName.ToLowerInvariant()
 
     # Skip vanilla / external engine presets or common keywords if applicable
-    if ($refName -in @("true", "false", "None", "Default")) { continue }
+    if ($refName -in @("true", "false", "None", "Default", "Primary", "Secondary")) { continue }
+    if ($ref.RefType -eq "SpawnGroupPrefab" -and $SkipPrefabs) { continue }
 
     if (-not $definitionsLower.ContainsKey($refLower)) {
         Write-Host "[ERROR] Missing Reference ($($ref.RefType)): '$refName' referenced in $($ref.File.Name) is not defined anywhere!" -ForegroundColor Red

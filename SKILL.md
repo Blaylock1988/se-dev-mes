@@ -9,55 +9,63 @@ allowed-tools: Read, run_command
 
 **Applies to Space Engineers version 1 with Modular Encounters Systems (MES) and RivalAI.**
 
-MES/RivalAI quirks, SBC pitfalls, and engineering standards for NPC-heavy (especially planet-rover and encounter) servers.
+MES/RivalAI architecture, SBC pitfalls, and engineering standards for encounter designers and AI coding agents.
 
 **Reading Guide - Claim Classification**:
-- **[HARD]** = Enforced by the installed MES build or the SE engine itself. Violations cause deterministic failure (crash, silent no-op, profile load failure). Verified against the local MES source code.
+- **[HARD]** = Enforced by the installed MES build or the SE engine itself. Violations cause deterministic failure (crash, silent no-op, profile load failure). Verified against the local MES C# source code.
 - **[SOFT]** = Field-tested heuristic from live-server operation, not pinned to a specific code path. An MES or SE update can invalidate it; treat as a starting point and re-validate if behavior changes.
 
 ---
 
-## 1. Modular Encounters Systems (MES) Source of Truth
+## 1. Source of Truth, Staleness Detection & 1-Step Update
 
-- **Framework Overview**: Workshop ID `1521905890` (Author: Meridius_IX / Lucas). MES acts as a spawning and AI routing shell for custom NPC ships, drones, stations, and encounters.
-- **Vanilla Spawning Suppression**: On session load, MES automatically disables vanilla cargo ships, random encounters, and planetary creatures (wolves/spiders) — replacing them with its own systems.
-- **Integration APIs & Hooks**: MES exposes event hooks and callbacks for major third-party frameworks:
-  - **CoreSystems (WeaponCore / WC)**: Weapon targeting, range overrides, and custom weapon replacement.
-  - **Defense Shields**: Shield modulation and damage filtering.
-  - **AiEnabled**: Crew bot and combat bot spawning on NPC grids.
-  - **Water Mod** & **Nebula Mod**: Hydrodynamic and atmospheric environment checks.
-- **WebWiki Is Outdated**: Online wikis and guides lack the newest features, contain human errors, or describe obsolete workarounds.
-- **Physical Codebase Reference**: Always verify tag names, casing, and logic against the local MES source code (typically `%AppData%\SpaceEngineers\Mods\Modular-Encounters-Systems\Data\Scripts\ModularEncountersSystems` on Windows dev installs).
-- **Key Inspection Targets**:
-  - `Spawning/Profiles/ImprovedSpawnGroup.cs` & `SpawnConditionsProfile.cs` (Spawning & conditions)
-  - `Spawning/Manipulation/` (WeaponRandomizer, BlockReplacement, DerelictionProfile)
-  - `Behavior/Subsystems/Trigger/TriggerChecks.cs` & `TriggerSystem.cs` (Trigger conditions & execution)
-  - `Behavior/Subsystems/Trigger/ActionSystem.cs` & `ActionReferenceProfile.cs` (RivalAI Actions)
-  - `Events/Action/EventActionProfile.cs` & `EventActionExecution.cs` (MES Event Actions)
-  - `Events/Condition/EventConditions.cs` (MES Event Conditions)
-  - `Zones/Zone.cs` & `ZoneManager.cs` (Zone boundaries, persistence, and restrictions)
-  - `Helpers/TagParse.cs` (List parsing and zero-stripping behavior)
+> [!IMPORTANT]
+> **Codebase Precedence Principle**: The MES C# source code is the **sole source of truth**. Online wikis and guides are notoriously outdated, contain errors, or describe legacy workarounds. Nothing takes precedence over the C# codebase.
 
-### Recommended Folder Layout for Encounter Mods
+### A. Automated Staleness & Version Drift Check
+When working on MES mods, verify whether this skill's tag cache matches the locally installed MES build:
+```bash
+python scripts/check_mes_sync.py
 ```
-Data/
-  SpawnGroups.sbc          <-- What to spawn, where, and when (SpawnGroupDefinition)
-  Behavior.sbc             <-- How the NPC acts (AI behavior tree + trigger list)
-  Factions.sbc             <-- NPC faction tags and reputation
-  Prefabs/                 <-- Blueprint SBC files for the actual ships/stations
-  Triggers/                <-- Individual trigger + action definitions
-  Replenish/               <-- Optional: ammo/item replenishment profiles
-  SpawnConditions/         <-- Optional: standalone spawn condition profiles
-  Loot/                    <-- Optional: loot table profiles
-  Autopilot/               <-- Optional: custom autopilot profiles
-```
+- Compares `scripts/mes_tag_cache.json` against `%AppData%\SpaceEngineers\Mods\Modular-Encounters-Systems`.
+- Detects new tags, removed tags, modified profiles, or source version drift.
 
-**SubtypeId Naming Convention**: `ModName-ProfileType-DescriptiveName` (e.g. `GVK-Trigger-InsideZoneCheck-SOBAN`, `GVK-Action-SpawnDefenses-Carrier`). Standardizing this makes cross-referencing sub-profiles predictable and prevents collision across mods.
+### B. One-Step Skill Update Workflow
+When MES is updated, run the automated updater:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Update-MesSkill.ps1
+```
+This rebuilds the 1,600+ tag cache, verifies XML examples, runs linters, and mirrors updates to the global skill directory.
+
+### C. Modular Reference Library (Progressive Disclosure)
+To optimize AI agent tokens and preserve context window space, detailed guides are partitioned into on-demand references:
+
+| Reference Document | Key Topics Covered |
+| :--- | :--- |
+| [profiles_and_tags.md](references/profiles_and_tags.md) | Catalog of 30+ profile types, Registration Phases 1–5, and tag types. |
+| [spawning_and_conditions.md](references/spawning_and_conditions.md) | Spawners, environment gates, threat scoring, altitude formulas, and event spawners. |
+| [behaviors_and_autopilot.md](references/behaviors_and_autopilot.md) | 11 Behavior subclasses, Role vs. CombatType state machines, and autopilot profiles. |
+| [manipulation_and_dereliction.md](references/manipulation_and_dereliction.md) | Block replacements, weapon randomizer (`<Public>true</Public>`), dereliction, AiEnabled bots, and ContainerTypes loot tables. |
+| [events_and_zones.md](references/events_and_zones.md) | MES Events vs RivalAI Triggers, boolean master gates, zero-stripping bug, dynamic zones. |
+| [economy_and_stores.md](references/economy_and_stores.md) | 3-part store grid sales chain (`Builder` subtype rule), 124m clearance, automated store refresh. |
+| [third_party_integrations.md](references/third_party_integrations.md) | WeaponCore (800m clamp, dynamic replacement range desync, fixed weapon timer proxy, lead prediction disaster, NPC weapon handicap architecture), Defense Shields, AiEnabled, Water Mod. |
+| [diagnostics_and_troubleshooting.md](references/diagnostics_and_troubleshooting.md) | In-game admin commands, log error signatures, sim-speed optimization, anti-clang mitigations. |
+| [sbc_xml_editing_guide.md](references/sbc_xml_editing_guide.md) | IDE setup (`*.sbc -> xml`), `<Description>` protection, encoding rules, safe formatting. |
+
+### D. Production-Tested Reference Examples
+Full, annotated `.sbc` implementations based on real-world workshop mods:
+
+- [role_combattype_state_machine.sbc](examples/role_combattype_state_machine.sbc): Role + CombatType state machine.
+- [courier_logistics_network.sbc](examples/courier_logistics_network.sbc): Parent-child courier logistics network.
+- [planetary_convoy_escort.sbc](examples/planetary_convoy_escort.sbc): Planetary convoy with event spawning and escorts.
+- [automated_economy_store.sbc](examples/automated_economy_store.sbc): Automated store inventory refresh loop.
+- [merchant_safezone_station.sbc](examples/merchant_safezone_station.sbc): Safezone station (`[CreateSafeZone:true]`) + wandering merchant.
 
 ---
 
-## 2. MES Event System vs. RivalAI Grid Trigger System
+## 2. MES Architecture & Core Mental Models
 
+### A. MES Events vs. RivalAI Grid Triggers
 MES Events run globally via `EventManager` (server-authoritative, no physical grid needed). RivalAI Triggers run on individual in-world grids via Remote Control blocks. **They use different tag names for sub-profiles.**
 
 | Feature | RivalAI Grid Action Tag | MES Event Action Tag | Notes |
@@ -65,7 +73,70 @@ MES Events run globally via `EventManager` (server-authoritative, no physical gr
 | **Encounter Spawner** | `[Spawner:ProfileId]` | `[SpawnData:ProfileId]` | Using `[Spawner:]` in an Event Action causes silent failure (`Spawner.Count == 0`). |
 | **Chat Message** | `[Chat:ProfileId]` | `[ChatData:ProfileId]` | Using `[Chat:]` in an Event Action fails to attach the chat profile. |
 | **Counter Changes** | `[IncreaseSandboxCounters:Name]` | `[ChangeCounters:true]` + `[IncreaseCounters:Name]` | MES Event Actions **require** `[ChangeCounters:true]` gating. |
-| **Zone Resizing** | `[ChangeZoneByName:true]` + `[ZoneName:]` + `[ZoneRadiusChangeType:]` + `[ZoneRadiusChangeAmount:]` + `[ChangeZoneOnlyByName:true]` | `[ChangeZoneByName:true]` + `[ZoneNames:]` + `[ZoneRadiusChangeTypes:]` + `[ZoneRadiusChangeAmounts:]` | RivalAI actions use **singular** tag names; MES Event Actions use **plural lists**. |
+| **Zone Resizing** | `[ChangeZoneByName:true]` + `[ZoneName:]` + `[ZoneRadiusChangeType:]` + `[ZoneRadiusChangeAmount:]` | `[ChangeZoneByName:true]` + `[ZoneNames:]` + `[ZoneRadiusChangeTypes:]` + `[ZoneRadiusChangeAmounts:]` | RivalAI actions use **singular** tag names; MES Event Actions use **plural lists**. |
+
+### B. The 11 Behavior Subclasses
+Every `[RivalAI Behavior]` profile inherits from one of 11 core behavior classes (`CoreBehavior.cs`):
+
+| Behavior Subclass | Primary Autopilot & Movement Profile | Intended Encounter Archetype |
+| :--- | :--- | :--- |
+| `Passive` | Stationary / None | Static stations, planetary bases, derelict wrecks. |
+| `CargoShip` | Linear waypoints, despawns at end | Transits between waypoints across space or planets. |
+| `Patrol` | Looping waypoint patrol route | Base perimeter guards, system patrols. |
+| `Fighter` | 6-DOF dogfighting, strafing, collision avoidance | Agile combat fighters, interceptors, attack drones. |
+| `Strike` | High-speed attack runs, breakaways, re-engagement | Bombers, torpedo craft, heavy strike gunships. |
+| `Horsefly` | Orbits target at standoff distance with weapons | Snipers, mortar platforms, missile gunships. |
+| `HorseFighter` | Standoff orbit transitioning to dogfight on damage | Adaptive hybrid fighters. |
+| `Cruiser` | Broadside alignment, slow turning, heavy armor | Capital ships, battlecruisers, dreadnoughts. |
+| `Escort` | Formation following around leader grid | Wingmen, convoy guards, defense escorts. |
+| `Nautical` | Surface water propulsion (Water Mod) | Naval combat ships, surface gunboats. |
+| `Drone` | Basic swarm / light drone movement | Inexpensive utility or kamikaze swarms. |
+
+### C. Dynamic Behavior Subclass & Autopilot Switching
+MES natively supports dynamic runtime AI state transitions. An NPC grid can swap its core behavior decision engine, flight autopilot, and active trigger sets on the fly without respawning:
+
+- **Behavior Subclass Swapping**:
+  - `[ChangeBehaviorSubclass:true]` + `[NewBehaviorSubclass:Fighter]` (or `Strike`, `Horsefly`, `Cruiser`, `CargoShip`, etc.).
+  - Instantly swaps the grid's underlying `CoreBehavior` decision engine.
+- **Autopilot Profile Swapping**:
+  - `[ChangeAutopilotProfile:true]` + `[AutopilotProfile:<ProfileName>]`.
+  - Swaps flight profiles (e.g. from long-distance cruising to close-quarters combat maneuvering).
+- **Trigger Tag Gating**:
+  - `[EnableTriggerTags:<Tag>]` and `[DisableTriggerTags:<Tag>]`.
+  - Dynamically activates or mutes groups of triggers sharing `[TriggerTags:<Tag>]`.
+- **Runtime Transition Pattern (e.g., Transit -> Combat -> Transit)**:
+  - **Engage Combat** (Triggered via `[Type:Damage]` or `[Type:TargetNear]`):
+    - Action: `[ChangeBehaviorSubclass:true]` + `[NewBehaviorSubclass:Fighter]`
+    - Action: `[ChangeAutopilotProfile:true]` + `[AutopilotProfile:CombatAutopilot]`
+    - Action: `[DisableTriggerTags:Cruising]` + `[EnableTriggerTags:InCombat]`
+  - **Disengage / Resume Transit** (Triggered via `[Type:NoTargetCheck]`):
+    - Action: `[ChangeBehaviorSubclass:true]` + `[NewBehaviorSubclass:CargoShip]`
+    - Action: `[ChangeAutopilotProfile:true]` + `[AutopilotProfile:CruiseAutopilot]`
+    - Action: `[DisableTriggerTags:InCombat]` + `[EnableTriggerTags:Cruising]`
+
+### D. Action Debugging: `[DebugMessage]` vs. Chat Profiles
+During development, test trigger and action execution using native debug tags instead of creating throwaway chat profiles:
+
+- **RivalAI Actions**: `[DebugMessage:<Text>]`
+  - Sends a direct in-game chat message attributed to the grid name (`ActionSystem.cs:3047`).
+  - Automatically resolves dynamic tokens (e.g. `{Faction}`, `{Position}`) and grid counters (e.g. `{MyCounter}`).
+  - **Zero XML Bloat**: Eliminates the need to create throwaway `[RivalAI Chat]` profiles or toggle `[UseChatBroadcast:true]`.
+- **MES Event Actions**: `[DebugChatMessage:<Text>]` and `[DebugHudMessage:<Text>]`
+  - `[DebugChatMessage:<Text>]`: Sends chat message attributed to the event action's SubtypeId with token replacement.
+  - `[DebugHudMessage:<Text>]`: Displays a 3-second on-screen HUD notification and chat line to all players.
+
+> [!WARNING]
+> **Never Use in Production**: `[DebugMessage]` is strictly a development diagnostic. It bypasses broadcast range, faction relation checks, audio cues, and channel filters. Never use it as a substitute for real NPC dialogue. In production releases, always use dedicated `[RivalAI Chat]` profiles.
+
+### E. ContainerTypes & Loot Injections
+- **Vanilla Definition (`ContainerTypes.sbc`)**: `<ContainerType CountMin="X" CountMax="Y">` defines loot tables with items, quantities (`AmountMin`/`AmountMax`), and relative probability weights (`<Frequency>`). Overriding vanilla subtypes like `PersonalContainerSmall` injects custom server progression items globally.
+- **Spawning Bulk vs Selective (`[MES Manipulation]`)**:
+  - Bulk: `[AssignContainerTypesToAllCargo:<ContainerTypeId>]` (automatically skips decorative DLC lockers).
+  - Selective: `[UseContainerTypeAssignment:true]` master gate + paired lists `[ContainerTypeAssignBlockName:<Name>]` & `[ContainerTypeAssignSubtypeId:<Id>]`. **Counts must match 1:1**, or MES silently drops all assignments.
+- **Non-Cargo Block Support**: While vanilla SE only supports ContainerTypes on cargo blocks, MES uses internal mod storage (`StorageTools.MesContainerTypeKey`) to populate cockpits, lockers, and cryo pods on spawn.
+- **MES Loot Profiles (`[MES Loot]`)**: Injects loot into filtered blocks via `[ContainerTypes]`, `[ContainerBlockTypes]`, `[MinBlocks]`, `[MaxBlocks]`.
+  - **[KNOWN BUG]**: `[AppendNameToBlock:true]` often fails to update the block custom name in the terminal even though loot is correctly inserted.
+- **Runtime Swapping (`[RivalAI Action]`)**: `[ApplyContainerTypeToInventoryBlock:true]` + `[ContainerTypeBlockNames]` & `[ContainerTypeSubtypeIds]` dynamically updates container loot tables via triggers.
 
 ---
 
@@ -81,7 +152,6 @@ Keen's XML deserializer strictly accepts **only one** `<SubtypeId>` per `<Id>` b
     <SubtypeId>Trigger-OutsideZone</SubtypeId>
     <SubtypeId>Action-OutsideZone</SubtypeId>
   </Id>
-  ...
 </EntityComponent>
 
 <!-- VALID: One definition per SubtypeId, each with its own <Id> block -->
@@ -92,19 +162,17 @@ Keen's XML deserializer strictly accepts **only one** `<SubtypeId>` per `<Id>` b
   </Id>
 </EntityComponent>
 ```
-- **Symptom**: `MES / Error: Could Not Load Action Profile From Trigger: : [SubtypeId]`.
 
-### B. Strict Single `<Id>` per `<Prefab>` / Definition Block
-In prefab and block definitions using self-closing attribute tags (`<Id Type="..." Subtype="..." />`), duplicate `<Id>` elements inside a `<Prefab>` cause Keen to read the first one and discard subsequent ones:
+### B. Strict Single `<Id>` per `<Prefab>` Block
+Duplicate `<Id>` elements inside a `<Prefab>` cause Keen to read the first one and discard subsequent ones:
 ```xml
-<!-- INVALID: Deserializer reads the first Id, registering the prefab under the wrong Subtype -->
+<!-- INVALID: Deserializer reads the first Id, registering prefab under wrong Subtype -->
 <Prefab xsi:type="MyObjectBuilder_PrefabDefinition">
-  <Id Type="MyObjectBuilder_PrefabDefinition" Subtype="NST MyFaction Nav Tower" />
+  <Id Type="MyObjectBuilder_PrefabDefinition" Subtype="NST Nav Tower" />
   <Id Type="MyObjectBuilder_PrefabDefinition" Subtype="NST Base Site Tower" />
   <CubeGrids>...</CubeGrids>
 </Prefab>
 ```
-- **Symptom**: `Spawn group initialization: Could not get prefab [SubtypeId]`.
 
 ### C. Ban XML Comments Inside `<Description>` Tags
 Keen deserializes `<Description>` via `ReadElementString()`, which strictly expects plain text:
@@ -121,32 +189,32 @@ Keen deserializes `<Description>` via `ReadElementString()`, which strictly expe
   [//Zone Presence Tracking]
 </Description>
 ```
-- **Symptom**: `System.Xml.XmlException: Unexpected node type Comment. ReadElementString method can only be called on elements with simple or empty content. MOD_CRITICAL_ERROR / MOD SKIPPED`.
+
+### D. Safe Formatting & Snippet Injection
+Use the included scripts to avoid tag damage:
+- **`Format-MesSbc.ps1`**: Formats XML while protecting `<Description>` from line-wrapping and converting `<!-- -->` to `[//]`.
+- **`Add-MesProfileSnippet.ps1`**: Safely injects new `EntityComponent` profiles into an existing `.sbc` without corrupting outer tags.
 
 ---
 
-## 4. Boolean Master-Gate Convention
-
-Sub-configuration tags (lists of variables, targets, coordinates, amounts) **do nothing on their own** in most MES profile types: a boolean master-switch tag that defaults to `false` guards them.
+## 4. Boolean Master-Gate Convention (MES Events)
 
 > [!CAUTION]
 > **The Golden Rule (MES Events only)**: Specifying child parameters (e.g. `[SetCounters:...]`, `[TrueBooleans:...]`, `[SpawnCoords:...]`) without their parent boolean tag (e.g. `[ChangeCounters:true]`, `[CheckTrueBooleans:true]`, `[SpawnEncounter:true]`) causes **silent execution failure**. MES logs zero errors, but the entire block is skipped.
 >
-> **RivalAI has NO master gates.** RivalAI action tags are self-gating (an empty list is a no-op), so `[SetBooleansTrue:X]` alone is valid. Do not add MES-style gates to `[MES AI Action]` profiles.
+> **RivalAI has NO master gates.** RivalAI action tags are self-gating (an empty list is a no-op). Do not add MES-style gates to `[MES AI Action]` profiles.
 
 ### A. MES Event Actions (`EventActionExecution.cs`)
 | Master Gating Tag (Required) | Dependent Child Tags Enabled | Purpose / Effect |
 | :--- | :--- | :--- |
-| `[ChangeCounters:true]` | `[SetCounters:]`, `[SetCountersAmount:]`, `[IncreaseCounters:]`, `[IncreaseCountersAmount:]`, `[DecreaseCounters:]`, `[DecreaseCountersAmount:]` | Mutating Sandbox integer counters. |
+| `[ChangeCounters:true]` | `[SetCounters:]`, `[IncreaseCounters:]`, `[DecreaseCounters:]` | Mutating Sandbox integer counters. |
 | `[ChangeBooleans:true]` | `[SetBooleansTrue:]`, `[SetBooleansFalse:]` | Setting Sandbox boolean variables. |
-| `[SpawnEncounter:true]` | `[SpawnCoords:]`, `[SpawnFactionTags:]`, `[SpawnData:]`, `[SpawnReplaceKeys:]`, `[SpawnReplaceValues:]` | Spawning encounters via event actions. |
+| `[SpawnEncounter:true]` | `[SpawnCoords:]`, `[SpawnFactionTags:]`, `[SpawnData:]` | Spawning encounters via event actions. |
 | `[ChangeZoneByName:true]` | `[ZoneNames:]`, `[ZoneRadiusChangeTypes:]`, `[ZoneRadiusChangeAmounts:]` | Dynamically modifying spherical zones by name. |
-| `[ChangeZoneAtPosition:true]` | `[ZoneCoords:]`, `[ZoneToggleActiveModes:]` | Activating/deactivating zones at coordinates. |
-| `[ToggleEvents:true]` | `[ToggleEventIds:]`, `[ToggleEventIdModes:]`, `[ToggleEventTags:]`, `[ToggleEventTagModes:]` | Enabling or disabling other MES Events. |
-| `[ResetCooldownTimeOfEvents:true]` | `[ResetEventCooldownIds:]`, `[ResetEventCooldownTags:]` | Forcing events back to 0 or full cooldown. |
-| `[IncreaseRunCountOfEvents:true]` | `[IncreaseRunCountEventIds:]`, `[IncreaseRunCountEventIdAmount:]`, `[IncreaseRunCountEventTags:]` | Manually incrementing event run counters. |
-| `[UseChatBroadcast:true]` | `[ChatData:]`, `[UseChatOverrideAuthor:true]`, `[ChatOverrideAuthor:]`, `[UseChatOverrideMessage:true]` | Transmitting HUD / chat notifications. |
-| `[AddGPSToPlayers:true]` | `[GPSNames:]`, `[GPSDescriptions:]`, `[GPSCoords:]`, `[UseGPSObjective:true]` | Creating HUD GPS waypoints for players. |
+| `[ToggleEvents:true]` | `[ToggleEventIds:]`, `[ToggleEventIdModes:]`, `[ToggleEventTags:]` | Enabling or disabling other MES Events. |
+| `[ResetCooldownTimeOfEvents:true]`| `[ResetEventCooldownIds:]`, `[ResetEventCooldownTags:]` | Forcing events back to 0 or full cooldown. |
+| `[UseChatBroadcast:true]` | `[ChatData:]`, `[UseChatOverrideAuthor:true]`, `[ChatOverrideAuthor:]` | Transmitting HUD / chat notifications. |
+| `[AddGPSToPlayers:true]` | `[GPSNames:]`, `[GPSDescriptions:]`, `[GPSCoords:]` | Creating HUD GPS waypoints for players. |
 | `[RemoveGPSFromPlayers:true]` | `[RemoveGPSNames:]` | Deleting HUD GPS waypoints from players. |
 
 ### B. MES Event Conditions (`EventConditions.cs`)
@@ -155,51 +223,12 @@ Sub-configuration tags (lists of variables, targets, coordinates, amounts) **do 
 | `[CheckCustomCounters:true]` | `[CustomCounters:]`, `[CustomCountersTargets:]`, `[CounterCompareTypes:]` | Evaluating sandbox counter variables. |
 | `[CheckTrueBooleans:true]` | `[TrueBooleans:]`, `[AllowAnyTrueBoolean:true/false]` | Requiring sandbox booleans to be true. |
 | `[CheckFalseBooleans:true]` | `[FalseBooleans:]`, `[AllowAnyFalseBoolean:true/false]` | Requiring sandbox booleans to be false. |
-| `[CheckPlayerNear:true]` | `[PlayerNearCoords:]`, `[PlayerNearDistanceFromCoords:]`, `[PlayerNearMinDistanceFromCoords:]` | Distance checks from specified coords. |
-| `[CheckPlayerCondition:true]` | `[PlayerConditionIds:]` | Player-specific state & inventory checks. |
-| `[CheckThreatScore:true]` | `[ThreatScoreAmount:]`, `[ThreatScoreDistance:]`, `[ThreatScoreCoords:]`, `[ThreatScoreType:]` | Player combat grid threat checks. |
-
-### C. RivalAI Actions & Conditions
-- Grid-scoped variables (`[SetBooleansTrue]`, `[SetCounters]`) write to `StoredSettings` on the Remote Control and are visible only to that grid.
-- Session-scoped variables (`[SetSandboxBooleansTrue]`, `[IncreaseSandboxCounters]`) write to world storage and are shared with MES Events and plugins.
-- Token `{Faction}` works in `[SetSandboxBooleansTrue/False]` and sandbox counter tags.
+| `[CheckPlayerNear:true]` | `[PlayerNearCoords:]`, `[PlayerNearDistanceFromCoords:]` | Distance checks from specified coords. |
+| `[CheckThreatScore:true]` | `[ThreatScoreAmount:]`, `[ThreatScoreDistance:]`, `[ThreatScoreCoords:]` | Player combat grid threat checks. |
 
 ---
 
-## 5. Verified Engine & MES Bugs / Quirks
-
-### A. Broken Action Tag - `ChangeBlocksShareModeAll`
-- **[HARD]** In `ActionSystem.cs` (line 2412), the inner loop `for (int j = grid.AllTerminalBlocks.Count - 1; j >= 0; j--)` indexes `var block = grid.AllTerminalBlocks[i];` using the outer grid loop variable `i` instead of `j`.
-- **Symptom**: It only ever checks index `i` repeatedly, throws `IndexOutOfRangeException` if `i >= AllTerminalBlocks.Count`, and never iterates the other terminal blocks. Do not use `ChangeBlocksShareModeAll`.
-
-### B. `[Type:WaypointNear]` & `[Type:WaypointFar]` Crash Loops
-- **[HARD]** In `TriggerChecks.cs` (lines 77, 84) and `TriggerSystem.cs` (line 205), MES indexes `_behavior.AutoPilot.State.CargoShipWaypoints[0]` without checking if `.Count > 0`.
-- **Symptom**: If waypoints are empty, completed, or not a cargo ship, an unhandled `ArgumentOutOfRangeException` aborts the `ProcessTriggers` loop, silently breaking all subsequent triggers on the grid.
-- **Workaround**: Use `[Type:TargetNear]` / `[Type:TargetFar]` pointing to a destination target profile instead.
-
-### C. `[Type:InsideZone]` vs `[Type:InsideActiveZone]`
-- **[HARD]** `[Type:InsideZone]` calls `ZoneManager.InsideZoneWithName(..., onlyActive: false)`. It evaluates `true` even when the target zone is deactivated!
-- **Workaround**: Use `[Type:InsideActiveZone]` (and `[Type:OutsideActiveZone]`) to test only currently active zones.
-
-### D. Voxel Cutting Tag Scope (`CutVoxelsAtAirtightCells`)
-- **[HARD]** MES has **no tag named `[CutVoxels:true]`**.
-  - On `[MES Spawn Conditions]`, the tag is strictly `[CutVoxelsAtAirtightCells:true]` and `[CutVoxelSize:<double>]` (`SpawnConditionsProfile.cs:739-740`). Specifying `[CutVoxels:true]` in a spawn conditions profile silently fails to register.
-  - On `<SpawnGroup>`, `<CutVoxels>true</CutVoxels>` is Keen's **vanilla** SBC XML tag.
-
-### E. Dereliction Percentage Gating (`UseSeparatePercentages`)
-- **[HARD]** In `DerelictionProfile.cs` (lines 171-188), if `UseSeparatePercentages` is `false` (default), MES sets `build = value; integrity = value;`. In Space Engineers, equal build and integrity percentages render a block as unfinished construction scaffolding rather than damaged/smoking.
-- Furthermore, `MinIntegrityPercentage`, `MaxIntegrityPercentage`, `MinBuildPercentage`, and `MaxBuildPercentage` are completely ignored unless `[UseSeparatePercentages:true]` is explicitly declared in the dereliction profile.
-
-### F. Weapon Randomizer Public Definition Requirement
-- **[HARD]** In `WeaponRandomizer.cs` (lines 182-194), MES iterates block definitions for weapon replacement and checks `if (!definition.Public)`. If a block definition has `<Public>false</Public>` in its SBC definition (common for hidden `_NPC` weapon variants), MES skips it UNLESS a `WeaponModRules` profile has `AllowIfNonPublic: true` or the ID is in `DefaultPublicBlocks`. Custom weapons specified in `[WeaponRandomizerTargetWhitelist:]` must have `<Public>true</Public>` or a matching mod rules override.
-
-### G. Zone `RestrictedSpawnGroups` Blacklist & Persistence Gate
-- **[HARD]** In `ZoneManager.cs` (line 320), `zone.RestrictedSpawnGroups` is **only** populated into active zone collections if `zone.Persistent == true`. Because `Persistent` defaults to `false` in `Zone.cs`, non-persistent zones completely ignore the tag.
-- **[HARD]** In `SpawnGroupManager.cs` (line 191), `RestrictedZoneSpawnGroups` functions as an inverted **blacklist** (`if (collection.RestrictedZoneSpawnGroups.Contains(spawnGroup.SpawnGroupName)) continue;`), blocking matching groups rather than acting as a whitelist.
-
----
-
-## 6. MES Tag Parsing Quirks & The Zero-Stripping Bug
+## 5. The Zero-Stripping Bug (`TagParse.cs`)
 
 In the MES source (`TagParse.cs`), the standard integer list parser strips all `0` values unless explicitly called with `preserveZero: true`:
 ```csharp
@@ -207,64 +236,24 @@ if (!preserveZero)
     result.RemoveAll(item => item == 0);
 ```
 
-- **MES Event Conditions (`EventConditions.cs`)**:
-  `CustomCountersTargets` calls `TagIntListCheck(s, ref CustomCountersTargets)` without preserving zeros.
-  - **Symptom**: Using `[CustomCountersTargets:0]` strips the `0`, resulting in an empty targets list. Evaluation fails with `Counter Names and Targets List Counts Don't Match`.
-  - **Workaround**:
-    - To test `< 0` (e.g. floor clamp): Use `[CustomCountersTargets:-1]` with `[CounterCompareTypes:LessOrEqual]`.
-    - To test `>= 0` (e.g. positive gate): Use `[CustomCountersTargets:-1]` with `[CounterCompareTypes:Greater]`.
-- **Tags Missing `preserveZero: true`**:
-  - `CustomCountersTargets` in `EventConditions.cs`
-  - `CustomSandboxCountersTargets` in `ConditionReferenceProfile.cs`
-  - `CustomSandboxCountersTargets` in `SpawnConditionsProfile.cs`
-  - `CustomZoneCounterValue` in `ZoneConditionsProfile.cs`
-  - `IncreaseCountersAmount` / `DecreaseCountersAmount` in `EventActionReference.cs`
+- **Symptom**: Using `[CustomCountersTargets:0]` in `[MES Event Condition]` strips the `0`, resulting in an empty targets list. Evaluation fails with:
+  `Counter Names and Targets List Counts Don't Match`.
+- **Workarounds**:
+  - To test `< 0` (e.g. floor clamp): Use `[CustomCountersTargets:-1]` with `[CounterCompareTypes:LessOrEqual]`.
+  - To test `>= 0` (e.g. positive gate): Use `[CustomCountersTargets:-1]` with `[CounterCompareTypes:Greater]`.
+- **Tags Missing `preserveZero: true` (Bugged)**:
+  `CustomCountersTargets` (in `EventConditions.cs`), `CustomSandboxCountersTargets` (in `ConditionReferenceProfile.cs` & `SpawnConditionsProfile.cs`), `CustomZoneCounterValue` (in `ZoneConditionsProfile.cs`), `IncreaseCountersAmount` / `DecreaseCountersAmount` (in `EventActionReference.cs`).
 - **Tags that Safely Preserve Zero**:
-  - `SetCountersAmount` in `EventActionReference.cs` (`preserveZero: true`)
-  - `CustomCountersTargets` in `ConditionReferenceProfile.cs` (RivalAI grid conditions pass `preserveZero: true`)
+  `SetCountersAmount` in `EventActionReference.cs`, `CustomCountersTargets` in `ConditionReferenceProfile.cs` (RivalAI grid conditions pass `preserveZero: true`).
 
 ---
 
-## 7. Operational Persistence & Field Rules
-
-### A. Persistence Realities
-- **Grid `CustomCounters`**: Serialized asynchronously into `RemoteControl.Storage` (`CoreBehavior.cs:514, 1567`). They do not persist across server crashes or restarts before Keen saves world data, and are lost if the Remote Control is destroyed or grid-split.
-- **Session `SandboxCounters`**: Persist directly in Keen's world sandbox storage (`MyAPIGateway.Utilities.SetVariable`), surviving restarts and crashes.
-- **Missing Variable Trap**: A condition referencing a sandbox counter never written to storage ALWAYS fails (`EventConditions.cs` checks the `GetVariable` success flag). Bootstrap state via a one-shot event (`UniqueEvent:true`).
-
-### B. Combat & Physics Field Notes
-- **[HARD] Turret 800m Default Clamp**: On grid spawn and weapon randomization, MES runs `SetAutomatedWeaponRanges(useMax: false)` (`GridEntity.cs:1736`), clamping all turret ranges to 800m. Action profiles must execute `[SetWeaponsToMaxRange:true]` to allow long-range weapons to engage past 800m.
-- **[HARD] Suspension Controls**: MES has no suspension steering/thrust controls. Planet rovers must use hidden NPC thrusters + gyros driven by MES thrust/gyro controls.
-- **[SOFT] WC2 Fixed Weapon Proxy**: In WeaponCore 2, fixed rockets, archer pods, and railguns can bug out when triggered natively by RivalAI weapon systems. Proxy them through an action profile triggering a Timer Block to fire.
-- **[SOFT] Anti-Clang Aircraft Instant-Despawn**: Disabled aircraft grids should be force-despawned immediately without checking grid size (`AttemptSmallDespawn`) to prevent falling airframes from penetrating terrain meshes and locking the server into continuous Havok collision loops.
-- **[SOFT] Thrust Modes**: `UseSurfaceHoverThrustMode` conflicts with `FlyLevelWithGravity` - do not enable both. Keep `WaypointTolerance` below `HoverPathStepDistance`.
-
----
-
-## 8. NPC Store Grid Sales & Economy Gotchas
-
-- **[HARD] Builder Subtype Required**: In `FactionTypes_Economy.sbc`, prefabs sold at NPC store blocks **must** be listed under a `<FactionType>` with subtype `Builder` in `<GridsForSale>`. Grids will not spawn or offer under other faction types.
-- **3-Part Registration Chain**:
-  1. Prefab must have a vanilla `StoreItem` definition with `<ItemType>Prefab</ItemType>`.
-  2. Prefab subtype must be added to `Builder` in `FactionTypes_Economy.sbc` under `<GridsForSale>`.
-  3. Prefab must be added to an MES `[MES Store]` profile under `[StoreItems:...]`.
-- **[SOFT] Icons - 256x256 PNGs vs DDS**: DDS textures for prefab store previews frequently fail or corrupt. Use **256x256 PNG** files for `<Icon>` and `<TooltipImage>` (these load cleanly after the client `.sbcB5` cache is generated).
-- **[HARD] Keen Store Icon Bug (Topic 49223)**: Mod-added ships in economy stores have an engine bug where icons occasionally fail to render on client store terminals.
-- **[HARD] Store Block Spawn Clearance**: Store blocks enforce a strict 124m clearance radius for spawning purchased grids. Ensure physical structures and player safezones do not obstruct this radius.
-
----
-
-## 9. Token Scope & Replacement Matrix (`IdsReplacer.cs`)
-
-MES supports variable substitution through `IdsReplacer`, but token resolution depends heavily on whether execution is **grid-bound (RivalAI)** or **session-bound (MES Events)**.
-
-### A. Supported Tokens in `IdsReplacer.cs`
+## 6. Token Matrix & Scope (`IdsReplacer.cs`)
 
 | Token | Replaced With | Context Source | Supported Environments |
 | :--- | :--- | :--- | :--- |
 | `{Faction}` | Initial NPC faction tag (e.g. `GAALSIEN`) | `npcData.InitialFaction` | RivalAI Grid Triggers only |
-| `{SpawnGroupName}` | Name of the SpawnGroup that spawned this grid | `npcData.SpawnGroupName` | RivalAI Grid Triggers only |
-| `{SpawnGroupNameTruncated}` | SpawnGroup name with `_SpawnGroup` removed | `npcData.SpawnGroupName` | RivalAI Grid Triggers only |
+| `{SpawnGroupName}` | Name of the SpawnGroup that spawned grid | `npcData.SpawnGroupName` | RivalAI Grid Triggers only |
 | `{Position}` | Formatted `{X:... Y:... Z:...}` coordinates | Remote Control block position | RivalAI Grid Triggers only |
 | `{EventInstance}` | Unique ID of spawning event instance | `npcData.EventInstanceId` | RivalAI Grid Triggers only |
 | `{<CustomStringKey>}` | Value set by `[CustomStrings:Key,Value]` | `npcData.CustomStrings` | RivalAI Grid Triggers only |
@@ -273,77 +262,82 @@ MES supports variable substitution through `IdsReplacer`, but token resolution d
 | `{PlayerName}` | Target/detected player's name | `BroadcastSystem.cs` / `EventAction` | RivalAI Chat & MES Event Chat |
 | `{GridName}` | Target/detected grid's name | `BroadcastSystem.cs` | RivalAI Chat only |
 | `{PlayerRelation}` | Relation to player (`Friendly`, `Neutral`, `Enemy`) | `BroadcastSystem.cs` | RivalAI Chat only |
-| `{PlayerFaction}` | Tag of player's faction | `BroadcastSystem.cs` | RivalAI Chat only |
 
-### B. Critical Token Rules & Pitfalls
-1. **[HARD] MES Events Pass `npcData = null`**: In `EventActionExecution.cs`, all calls to `IdsReplacer.ReplaceId(null, ...)` pass `null`. Therefore, `{Faction}`, `{SpawnGroupName}`, and `{<CustomStringKey>}` **never resolve in MES Events**; only `{<SandboxVarKey>}` and `{PlayerName}` (in chat) function.
-2. **[HARD] Profile SubtypeIds Resolve Statically**: Trigger `[Actions:]` profile SubtypeIds are resolved at load time from `ProfileManager`. Putting tokens in action profile names (e.g. `[Actions:MyAction-{Faction}]`) **fails to find the profile**. Token replacement only runs on dynamic runtime parameters (Command codes, Zone names, GPS names, Chat text, Debug messages, LCD text, Sandbox variables).
-3. **[HARD] No Rival Faction Token**: `{Faction}` always resolves to the NPC's *own* faction. There is no `{RivalFaction}` or `{OpposingFaction}` token; cross-faction interactions (e.g. deducting points from own faction and adding to rival) require separate hardcoded action profiles per faction.
+### Critical Token Rules
+1. **[HARD] MES Events Pass `npcData = null`**: `{Faction}`, `{SpawnGroupName}`, and `{<CustomStringKey>}` **never resolve in MES Events**; only `{<SandboxVarKey>}` and `{PlayerName}` (in chat) function.
+2. **[HARD] Profile SubtypeIds Resolve Statically**: Putting tokens in action profile names (e.g. `[Actions:MyAction-{Faction}]`) **fails to find the profile**. Token replacement only runs on dynamic runtime parameters (Command codes, Zone names, GPS names, Chat text, LCD text, Sandbox variables).
+3. **[HARD] No Rival Faction Token**: `{Faction}` always resolves to the NPC's *own* faction. There is no `{RivalFaction}` token.
 
 ---
 
-## 10. Tooling & Diagnostics Suite
+## 7. Verified Engine Pitfalls & Workarounds
 
-The `se-dev-mes` skill provides dedicated command-line utilities and PowerShell linters in its `scripts/` directory to inspect, validate, and scaffold MES/RivalAI mod content.
+- **[HARD] Turret 800m Default Clamp**: On grid spawn, MES clamps all automated weapon ranges to 800m (`GridEntity.cs:1736`). Action profiles must execute `[SetWeaponsToMaxRange:true]` to allow long-range weapons to engage past 800m.
+- **[HARD] Economy Store Grid Sales (`Builder` Subtype)**: In `FactionTypes_Economy.sbc`, prefabs sold at NPC store blocks **must** be listed under a `<FactionType>` with subtype `Builder` in `<GridsForSale>`. Grids will not spawn or offer under other faction types. Store blocks also enforce a strict **124m clearance radius**.
+- **[HARD] `[Type:WaypointNear]` / `[Type:WaypointFar]` Crash**: In `TriggerChecks.cs:77`, MES indexes `CargoShipWaypoints[0]` without checking `.Count > 0`. If waypoints are empty or completed, an unhandled `ArgumentOutOfRangeException` aborts the trigger loop. Use `[Type:TargetNear]` / `[Type:TargetFar]` instead.
+- **[HARD] `ChangeBlocksShareModeAll` Bug**: In `ActionSystem.cs:2412`, loop indexes outer variable `i` instead of inner `j`, throwing `IndexOutOfRangeException`. Do not use `ChangeBlocksShareModeAll`.
+- **[HARD] `[Type:InsideZone]` vs `[Type:InsideActiveZone]`**: `[Type:InsideZone]` evaluates `true` even when the target zone is deactivated! Use `[Type:InsideActiveZone]`.
+- **[HARD] Dereliction Percentage Gating**: `MinIntegrityPercentage` and `MinBuildPercentage` are completely ignored unless `[UseSeparatePercentages:true]` is explicitly declared in `[MES Dereliction]`.
+- **[HARD] Weapon Randomizer Public Definition Rule**: MES skips non-public weapon definitions unless `<Public>true</Public>` is declared in SBC or `WeaponModRules` overrides `AllowIfNonPublic: true`.
+- **[SOFT] WeaponCore 2 Fixed Weapon Proxy**: In WC2, fixed rocket launchers/railguns can fail when triggered natively by RivalAI. Proxy them via an action profile triggering a Timer Block.
+- **[SOFT] Anti-Clang Aircraft Force-Despawn**: Disabled aircraft should force-despawn immediately (`AttemptSmallDespawn`) to prevent falling airframes from penetrating terrain meshes and locking the server into continuous Havok collision loops.
 
-### A. Tag Inspector CLI (`query_mes_tags.py`)
-Queries tag definitions, data types, and master gates directly from the local MES source code.
+---
+
+## 8. Diagnostics, Scaffolding & Tooling Suite
+
+All tools reside in the `scripts/` directory:
+
 ```bash
-# Search for any tag containing 'Zone'
+# 1. Inspect tags, data types, and master gates from MES source or offline cache
 python scripts/query_mes_tags.py --tag Zone
-
-# Search for tags within a specific profile type (e.g. RivalAI Action)
 python scripts/query_mes_tags.py --profile "RivalAI Action" --tag Spawner
-```
 
-### B. SBC Deserialization Auditor (`audit_sbc.ps1`)
-Validates XML structure against Keen deserializer pitfalls:
-- Duplicate `<SubtypeId>` elements inside `<Id>` blocks.
-- Duplicate `<Id>` elements inside `<Prefab>` definitions.
-- Illegal XML comments (`<!-- ... -->`) inside `<Description>` tags.
-```powershell
+# 2. Check for tag cache / source code version drift
+python scripts/check_mes_sync.py
+
+# 3. 1-Step Update: Rebuild cache, run linters, sync to global skill
+powershell -ExecutionPolicy Bypass -File scripts/Update-MesSkill.ps1
+
+# 4. Safe XML Formatter: Protects <Description> and converts <!-- --> comments to [//]
+powershell -ExecutionPolicy Bypass -File scripts/Format-MesSbc.ps1 -Path ".\Content\Data"
+
+# 5. Profile Snippet Injector: Safely injects EntityComponents without breaking XML
+powershell -ExecutionPolicy Bypass -File scripts/Add-MesProfileSnippet.ps1 -TargetFile ".\Data\Triggers.sbc" -SnippetFile ".\snippets\action.xml"
+
+# 6. SBC Deserialization Auditor: Detects duplicate SubtypeIds and illegal comments
 powershell -ExecutionPolicy Bypass -File scripts/audit_sbc.ps1 -Path ".\Content\Data"
-```
 
-### C. MES Tag Linter (`audit_mes_tags.ps1`)
-Scans `.sbc` files for semantic MES bugs and pitfall patterns:
-- Zeroes in `CustomCountersTargets` (detects the zero-stripping bug).
-- Crash-prone `[Type:WaypointNear]` / `[Type:WaypointFar]` triggers.
-- Broken `[ChangeBlocksShareModeAll:true]` action tags.
-- Missing boolean master gates in `[MES Event Action]` and `[MES Event Condition]`.
-- List count mismatches across paired tags (`SetCounters` vs `SetCountersAmount`, `SpawnData` vs `SpawnCoords`).
-- Dynamic tokens used in `[Actions:]` profile names or `{Faction}` inside MES Events.
-```powershell
+# 7. Semantic Tag Linter: Checks master gates, zero-stripping bugs, and tag alignment
 powershell -ExecutionPolicy Bypass -File scripts/audit_mes_tags.ps1 -Path ".\Content\Data"
+
+# 8. Cross-Reference Validator: Validates all profile references across files
+powershell -ExecutionPolicy Bypass -File scripts/audit_mes_references.ps1 -Path ".\Content\Data" -WarnOrphans -SkipPrefabs
+
+# 9. Scaffolding Generator: Creates production-ready encounter profiles
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix MYMOD -Name IronDrifter -Faction DERELICT
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ConvoyLeaderEscort -ModPrefix MYMOD -Name DesertHauler -Faction GAALSIEN
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicZoneLadder -ModPrefix MYMOD -Name ContestedTerritory
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern StoreGrid -ModPrefix MYMOD -Name OutpostTrader -Faction COALITION
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicStateNpc -ModPrefix MYMOD -Name PatrolDrone -Faction GAALSIEN
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern PlanetaryInstallation -ModPrefix MYMOD -Name OutpostAlpha -Faction GAALSIEN
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern CombatDrone -ModPrefix MYMOD -Name HunterKiller -Faction GAALSIEN
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ReinforcementNetwork -ModPrefix MYMOD -Name StrikeNet -Faction GAALSIEN
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern BossEncounter -ModPrefix MYMOD -Name OverlordCarrier -Faction GAALSIEN
 ```
 
-### D. Profile Cross-Reference Validator (`audit_mes_references.ps1`)
-Validates that all profile references across files resolve cleanly:
-- Remote Control -> Triggers / TriggerGroups.
-- Triggers -> Conditions / Actions.
-- Actions -> Spawners / Chats / CommandProfiles / Events.
-- Spawners -> SpawnGroups -> Prefabs / SpawnConditions.
-- Flags missing references, case mismatches, and orphaned/unused profiles.
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/audit_mes_references.ps1 -Path ".\Content\Data" -WarnOrphans
-```
+### B. In-Game Diagnostics & Agent Troubleshooting Protocol
+When an encounter fails to spawn, triggers don't fire, or AI malfunctions, instruct the user to toggle native diagnostic logging and copy logs to clipboard:
 
-### E. Profile Scaffolding Generator (`New-MesProfile.ps1`)
-Generates production-ready, defensively engineered `.sbc` files for standard encounter patterns:
-- `DefendedWreck`: Derelict spawn group with `[UseSeparatePercentages:true]`, proximity chat warning, damage defense-drone spawner, and timed cleanup.
-- `ConvoyLeaderEscort`: CargoShip leader with follow escorts, squad combat triggers, and 800m turret range unclamp.
-- `DynamicZoneLadder`: Dynamic spherical zone with counter-driven radius expansion/contraction ladder (zero-stripping safe).
-- `StoreGrid`: Economy station grid registration (vanilla `StoreItem`, `Builder` subtype entry for `FactionTypes_Economy.sbc`, and `[MES Store]` profile).
-```powershell
-# Generate a defended wreck encounter
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix GVK -Name IronDrifter -Faction DERELICT
-
-# Generate a convoy leader + escort
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ConvoyLeaderEscort -ModPrefix GVK -Name DesertHauler -Faction GAALSIEN
-
-# Generate a dynamic zone ladder
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicZoneLadder -ModPrefix GVK -Name ContestedTerritory
-
-# Generate store grid economy definitions
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern StoreGrid -ModPrefix GVK -Name OutpostTrader -Faction COALITION
-```
+- **Spawner Diagnostics**:
+  - Enable logging: `/MES.SpawnDebug.SpawnGroup.true` and `/MES.SpawnDebug.Spawning.true`.
+  - Copy log buffer to clipboard: `/MES.Info.GetLogging.SpawnDebug` (or `/MES.IGLSD`).
+  - Check eligible spawns at player position: `/MES.Info.GetEligibleSpawnsAtPosition` (or `/MES.GESAP`).
+- **Behavior & Trigger Diagnostics**:
+  - Enable logging: `/MES.BehaviorDebug.Trigger.true`, `/MES.BehaviorDebug.Condition.true`, `/MES.BehaviorDebug.Action.true`.
+  - Copy log buffer to clipboard: `/MES.Info.GetLogging.BehaviorDebug` (or `/MES.IGLBD`).
+  - Copy target grid AI state to clipboard: `/MES.Info.GetGridBehavior` (or `/MES.IGGB`).
+- **Deep-Dive GameLog File Workflow**:
+  - For complex or intermittent issues, instruct the user to append `.GameLog.true` (e.g. `/MES.SpawnDebug.GameLog.true` / `/MES.BehaviorDebug.GameLog.true`).
+  - Have the user point the AI agent directly to the log file in `%AppData%\SpaceEngineers\` (e.g. `SpaceEngineers.log` or timestamped `SpaceEngineers_20260919_090818200.log`).
+  - The AI agent can read and search the file directly using file-viewing tools to extract timestamps, unhandled exceptions, and tag evaluation traces without requiring manual copy-pasting.

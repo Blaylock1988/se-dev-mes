@@ -1,0 +1,135 @@
+# Third-Party Mod & Framework Integrations
+
+Engineering guidelines for integrating Modular Encounters Systems (MES) with major third-party frameworks: CoreSystems (WeaponCore), Defense Shields, AiEnabled, Water Mod, and Torch server plugins.
+
+---
+
+## 1. CoreSystems / WeaponCore (WC) Integration
+
+MES contains built-in hooks for WeaponCore grids, but deep architectural mismatches require strict engineering workarounds:
+
+### A. The 800m Turret Range Clamp
+- **[HARD] Default Clamp**: On grid spawn and weapon randomization, MES executes `SetAutomatedWeaponRanges(useMax: false)` (`GridEntity.cs:1736`), clamping all automated weapon ranges to **800m**.
+- **The Fix**: Any combat encounter with long-range or capital weapons must execute `[SetWeaponsToMaxRange:true]` in an early trigger action (e.g. on spawn, on player proximity, or on damage) to allow WC turrets to engage past 800m.
+
+### B. The Dynamic Replacement Range Desync (The MES vs. WC Conflict)
+- **[HARD] The Bug**: When weapons are dynamically swapped via `[UseWeaponRandomizer:true]` or `[BlockReplacementProfiles]`, `SetWeaponsToMaxRange:true` frequently **fails to unclamp the weapons**.
+  - In `WeaponRandomizer.cs:1321`, MES queries `APIs.WeaponCore.GetMaxWeaponRange(termBlock, 0)`.
+  - Because WeaponCore registers newly spawned blocks asynchronously, the API call often returns `0` or default range before WC finishes registration.
+  - MES permanently caches this stale value in `DefaultRangeWC` (`WeaponRandomizer.cs:1322`), locking the replaced weapon at 800m or 0m permanently.
+  - Furthermore, dynamically replaced blocks lose all WeaponCore terminal/GUI settings saved in the original prefab blueprint.
+- **Production Rule**: For high-stakes combat encounters, **do not dynamically replace primary WeaponCore weapons**. Bake the exact WeaponCore weapon blocks directly into the prefab blueprint with their ranges, targeting modes, and fire rates pre-configured.
+
+### C. Getting MES to Fire WC Fixed Weapons (Prefab Setup & Proxying)
+- **Prefab Pre-Configuration**: Fixed forward-firing weapons must have their WeaponCore settings properly configured before saving the blueprint:
+  - Weapon group and AI focus/auto-fire settings must be active.
+  - Correct weapon ID/submunition slot verified.
+- **The Alignment Flicker Trap**:
+  - In `CoreWeapon.cs:443`, MES calls `APIs.WeaponCore.ToggleWeaponFire(true)` when aligned to target and immediately calls `ToggleWeaponFire(false)` if the grid alignment deviates by even a fraction of a degree (`WeaponMaxAngleFromTarget`).
+  - Due to gyro overshoot and rotational damping, alignment flickers every tick. For beam weapons, burst cannons, or charge-up railguns, this causes constant stuttering and aborted firing cycles where weapons never complete a shot.
+- **The Timer Block Proxy**:
+  - Instead of letting MES fire the weapon directly, proxy fixed weapon firing through a Timer Block on the prefab.
+  - Use a RivalAI action profile (`[TriggerTimerBlocks:true]` + `[TimerBlockNames:FireFixedWeapons]`) to trigger the timer, which executes WeaponCore's "Shoot Once" or cycles "Shoot On/Off" for a fixed duration, completely decoupling weapon cycling from MES's jittery gyro alignment.
+
+### D. The Target Lead Prediction Disaster
+- **Why MES Misses 100% of Fixed Shots**:
+  - In `AutoPilotSystem.cs:1304`, MES computes target lead using `VectorHelper.TrajectoryEstimation()`, which assumes a simple linear projectile speed, constant acceleration, and zero drag.
+  - WeaponCore ammos feature complex ballistic physics: drag curves, acceleration profiles, gravity multipliers, multi-stage velocities, and submunitions that MES's solver cannot model.
+  - SE gyroscope rotational inertia causes the NPC ship to constantly hunt and overshoot `_calculatedWeaponPredictionWaypoint`. Against an evasive or maneuvering player ship, fixed weapons spray wildly into empty space.
+
+### E. The NPC Weapon Handicap Architecture
+To bring NPC fixed-weapon accuracy on par with player grids, use these proven modding patterns:
+
+1. **Smart / Guided Ammunition**:
+   - Equip NPC-only weapons with WeaponCore smart ammunition (`Guidance: Smart` or `Guided`, tracking cones, proximity detonation / flak burst).
+   - The NPC only needs to aim within the forward hemisphere; the ammunition closes the lead gap and tracks maneuvering player grids.
+
+2. **Low-Arc Gimbaled Mounts (Disguised as Fixed)**:
+   - Configure the weapon in WeaponCore with a small gimbal arc (e.g. 5°–15° traverse/elevation).
+   - Lets **WeaponCore's native 60 FPS predictive solver** aim the barrel directly at the target, completely bypassing MES's clumsy hull-turning autopilot.
+
+3. **High-Velocity / Near-Hitscan Projectiles**:
+   - Drastically boosting muzzle velocity (e.g. 2,500–4,000 m/s or energy beams) collapses time-to-target (\(t = d / v\)), making lead calculation errors negligible.
+
+4. **NPC-Only Weapon Protection (`<Public>false</Public>`)**:
+   - Set `<Public>false</Public>` in the weapon's SBC definition to prevent players from grinding and salvaging these aim-assisted/homing weapons.
+   - Pair with `[MES Weapon Mod Rules]` (`[AllowIfNonPublic:true]`) so MES does not skip them during spawning:
+     ```xml
+     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+       <Id>
+         <TypeId>Inventory</TypeId>
+         <SubtypeId>ModPrefix-WeaponRules-NpcGuns</SubtypeId>
+       </Id>
+       <Description>
+         [MES Weapon Mod Rules]
+         [WeaponBlock:MyObjectBuilder_SmallMissileLauncher/NPC_GuidedRocketPod]
+         [AllowIfNonPublic:true]
+       </Description>
+     </EntityComponent>
+     ```
+
+5. **`[RivalAI Weapons]` Profile Tuning**:
+   - In `[RivalAI Weapons]`, relax `[WeaponMaxAngleFromTarget]` (e.g. from 2° to 8°–12°) so the NPC doesn't withhold fire forever while gyro-hunting:
+     ```xml
+     <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+       <Id>
+         <TypeId>Inventory</TypeId>
+         <SubtypeId>ModPrefix-Weapons-NpcCombat</SubtypeId>
+       </Id>
+       <Description>
+         [RivalAI Weapons]
+         [UseStaticGuns:true]
+         [UseTurrets:true]
+         [WeaponMaxAngleFromTarget:10]
+         [WeaponMaxBaseDistanceTarget:3000]
+       </Description>
+     </EntityComponent>
+     ```
+
+---
+
+## 2. Defense Shields Integration
+
+MES interfaces with DarkStar's Defense Shields API:
+
+- **Shield Modulation**: NPC grids can automatically modulate shield frequency to resist incoming kinetic or energy damage based on combat triggers.
+- **Overheat & Downed Shield Triggers**:
+  - Use `[Type:Damage]` triggers to monitor shield collapse and execute defensive actions (e.g. popping decoy pods, activating jump drives, or triggering smoke screens).
+- **Shield Bypass & Hardening**:
+  - Specific action profiles can force shield generators to overcharge or enter emergency lockdown when boarding threats are detected.
+
+---
+
+## 3. AiEnabled Integration (Hostile Bot Crews)
+
+The AiEnabled framework allows NPC grids to spawn walking, intelligent crew bots and combat androids:
+
+- **Profile**: `[MES Bot Spawn]`
+- **Required Subsystems**:
+  - Grids must contain navigable interior corridors.
+  - Spawners can be tied to Cryo Chambers, Medical Rooms, or Cockpits.
+- **Roles**:
+  - `Defender`: Patrols interior rooms and attacks players attempting to grind or hack blocks.
+  - `Crew`: Ambient non-combat personnel.
+  - `Boarder`: Deploys toward nearby player grids if within close proximity.
+
+---
+
+## 4. Water Mod & Hydrodynamic AI
+
+When operating on worlds running the Water Mod:
+
+- **Behavior Subclass**: Set `[BehaviorName:Nautical]` in `[RivalAI Behavior]`.
+- **Autopilot Profile**: Use `[RivalAI Autopilot]` configured with nautical buoyancy locks.
+- **Spawn Conditions**: Use `[MES Spawn Conditions]` with `[WaterRequired:true]` or `[UnderwaterSpawn:true]`.
+- **Anti-Sinking Logic**: Ensure buoyancy tanks or flotation blocks are prioritized in defense triggers.
+
+---
+
+## 5. Torch Plugins & Server Compatibility
+
+On dedicated servers running Torch or Magnetar/Pulsar plugins:
+
+- **Grid Defender**: Suppresses low-speed collision damage while preserving high-speed missile damage. Ensure NPC collision evasion waypoints don't trigger false positives.
+- **Voxel Clang Mitigation**: Falling or disabled aircraft must be despawned cleanly (`[ForceDespawn:true]`) rather than allowed to crash and penetrate terrain meshes, which traps rigid bodies in continuous Havok collision solver loops and craters sim-speed to 0.2.
+

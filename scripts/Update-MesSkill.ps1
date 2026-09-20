@@ -51,6 +51,12 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+& powershell -ExecutionPolicy Bypass -File "$PSScriptRoot/audit_prefabs.ps1" -Path "$repoRoot/examples"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] Prefab audit failed on examples!" -ForegroundColor Red
+    exit 1
+}
+
 # Step 3: Synchronize to Global Skill Directory
 Write-Host "`n[3/4] Synchronizing repository to global skill directory..." -ForegroundColor Yellow
 if (Test-Path $globalSkillPath) {

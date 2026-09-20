@@ -170,15 +170,23 @@ Validates that every referenced trigger, action, condition, spawner, spawn group
 powershell -ExecutionPolicy Bypass -File scripts/audit_mes_references.ps1 -Path ".\Content\Data" -WarnOrphans -SkipPrefabs
 ```
 
-### 9. Profile Scaffolding Generator (`New-MesProfile.ps1`)
+### 9. Prefab & Binary Cache Auditor (`audit_prefabs.ps1`)
+Audits `Data/Prefabs/*.sbc` for silent spawn failure modes:
+- **SubtypeId vs. File Name Mismatch**: Warns if the internal `<Prefab><Id><SubtypeId>` diverges from the file name (SpawnGroups match by internal SubtypeId, not file name).
+- **Stale `.sbcB5` Binary Caches**: Detects cached binary files that override XML edits. Pass `-CleanStaleB5` to automatically purge them.
+- **Remote Control Block Check**: Verifies that prefabs contain an operational Remote Control block required for RivalAI behaviors.
+```powershell
+# Audit prefabs and purge stale .sbcB5 binary caches
+powershell -ExecutionPolicy Bypass -File scripts/audit_prefabs.ps1 -Path ".\Data\Prefabs" -CleanStaleB5
+```
+
+### 10. Profile Scaffolding Generator (`New-MesProfile.ps1`)
 Generates production-ready `.sbc` files for 9 standard encounter patterns:
 ```powershell
 # 1. Defended Wreck
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix MYMOD -Name IronDrifter -Faction DERELICT
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix MYMOD -Name ScrapWreck -Faction SPRT
 
 # 2. Convoy Leader + Escort
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ConvoyLeaderEscort -ModPrefix MYMOD -Name DesertHauler -Faction GAALSIEN
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ConvoyLeaderEscort -ModPrefix MYMOD -Name CargoFreighter -Faction SPRT
 
 # 3. Dynamic Zone Ladder
@@ -213,6 +221,37 @@ powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern Bos
 - **`WaypointNear` / `WaypointFar`**: Unchecked index on `CargoShipWaypoints[0]` crashes the trigger loop if waypoints are empty.
 - **`InsideZone` vs `InsideActiveZone`**: `[Type:InsideZone]` evaluates `true` even when the target zone is deactivated.
 - **Economy Store Grids**: Purchased grids only spawn if registered under a `<FactionType>` with subtype `Builder` in `FactionTypes_Economy.sbc`.
+
+---
+
+## Recommended Tooling & Space Engineers AI Skills Ecosystem
+
+When developing Space Engineers mods, encounter packs, and plugins, no single skill covers every domain. We recommend pairing **`se-dev-mes`** with the following companion skills and tools:
+
+### 1. C# Modding, Decompiled Code & Plugins: Viktor Ferenczi's CometWorks Skills
+For C# ModAPI scripting, reading decompiled Space Engineers source code, or writing Torch/Pulsar plugins, install **[Viktor Ferenczi's CometWorks Skills](https://github.com/CometWorks/skills)**:
+- **`se-dev-game-code`**: Enables AI agents to search Keen Software House's decompiled client C# codebase—indispensable when investigating vanilla spawning mechanics, grid serialization, or ModAPI interfaces.
+- **`se-dev-server-code`**: Decompiled dedicated server C# codebase search.
+- **`se-dev-mod`**: ModAPI C# scripting guide and patterns.
+- **`se-dev-torch`**: Torch plugin development and server administration.
+- **`se-dev-script`**: In-game Programmable Block (PB) script development.
+
+```bash
+git clone https://github.com/CometWorks/skills.git ~/.gemini/config/skills/cometworks-skills
+```
+
+### 2. C# Script Modding & PB Development: MDK2 (Malware's Development Kit 2)
+For writing and compiling C# script mods and PB scripts in an IDE (Visual Studio / Rider), use **[MDK2 (Malware's Development Kit 2)](https://github.com/malware-dev/MDK-SE)**:
+- Full IDE IntelliSense and syntax highlighting against the latest Space Engineers binaries.
+- Automated script minification, packing, and deployment into your local Space Engineers mods folder.
+- Type-checking and static analysis preventing illegal namespace usage in PB scripts.
+
+### 3. 3D Assets, Models & Non-MES Frameworks: Godimas101's Skills
+For non-MES domains such as 3D modeling, audio, and LCD scripting, reference select modules from **[Godimas101's se-claude-skill](https://github.com/Godimas101/se-claude-skill)**:
+- **`se-assets`**: Guide for 3D modeling (`.mwm`), Havok collision models, and audio conversions (`.xwm`)—ideal when designing custom hulls or blocks for your MES prefabs.
+- **`se-tss`**: Guide for TextSurfaceScripts (drawing custom UI on LCD screens via ModAPI).
+- **`se-frameworks` (non-MES)**: Reference guides for *Animation Engine*, *Mod Adjuster*, *Scope Framework*, and *Tank Tracks*.
+- *(Note: `se-dev-mes` explicitly supersedes and replaces Godimas101's `se-frameworks/references/mes.md`)*.
 
 ---
 

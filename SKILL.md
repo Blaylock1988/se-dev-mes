@@ -28,7 +28,12 @@ MES/RivalAI architecture, SBC pitfalls, and engineering standards for encounter 
 > [!IMPORTANT]
 > **Codebase Precedence Principle**: The MES C# source code is the **sole source of truth**. Online wikis and guides are notoriously outdated, contain errors, or describe legacy workarounds. Nothing takes precedence over the C# codebase.
 
-### A. Automated Staleness & Version Drift Check
+### A. Approved Space Engineers AI Skills Ecosystem & Companion Tools
+- **C# ModAPI, Decompiled Engine & Plugins**: Use **[Viktor Ferenczi's CometWorks skills](https://github.com/CometWorks/skills)** (`se-dev-game-code` for decompiled SE client source, `se-dev-server-code` for dedicated server, `se-dev-mod` for ModAPI scripts, `se-dev-torch` for Torch).
+- **C# Script Modding & PB Development**: Use **[MDK2 (Malware's Development Kit 2)](https://github.com/malware-dev/MDK-SE)** for Visual Studio / Rider with full IntelliSense, type analysis, and automated mod deployment.
+- **3D Assets & Models**: Use **[Godimas101's se-claude-skill](https://github.com/Godimas101/se-claude-skill)** for non-MES domains (`se-assets` for `.mwm` models/Havok collisions, `se-tss` for TextSurfaceScripts).
+
+### B. Automated Staleness & Version Drift Check
 When working on MES mods, verify whether this skill's tag cache matches the locally installed MES build:
 ```bash
 python scripts/check_mes_sync.py
@@ -36,14 +41,14 @@ python scripts/check_mes_sync.py
 - Compares `scripts/mes_tag_cache.json` against `%AppData%\SpaceEngineers\Mods\Modular-Encounters-Systems`.
 - Detects new tags, removed tags, modified profiles, or source version drift.
 
-### B. One-Step Skill Update Workflow
+### C. One-Step Skill Update Workflow
 When MES is updated, run the automated updater:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/Update-MesSkill.ps1
 ```
 This rebuilds the 1,600+ tag cache, verifies XML examples, runs linters, and mirrors updates to the global skill directory.
 
-### C. Modular Reference Library (Progressive Disclosure)
+### D. Modular Reference Library (Progressive Disclosure)
 To optimize AI agent tokens and preserve context window space, detailed guides are partitioned into on-demand references:
 
 | Reference Document | Key Topics Covered |
@@ -58,7 +63,7 @@ To optimize AI agent tokens and preserve context window space, detailed guides a
 | [diagnostics_and_troubleshooting.md](references/diagnostics_and_troubleshooting.md) | In-game admin commands, log error signatures, sim-speed optimization, anti-clang mitigations. |
 | [sbc_xml_editing_guide.md](references/sbc_xml_editing_guide.md) | IDE setup (`*.sbc -> xml`), `<Description>` protection, encoding rules, safe formatting. |
 
-### D. Production-Tested Reference Examples
+### E. Production-Tested Reference Examples
 Full, annotated `.sbc` implementations based on real-world workshop mods:
 
 - [role_combattype_state_machine.sbc](examples/role_combattype_state_machine.sbc): Role + CombatType state machine.
@@ -321,7 +326,10 @@ powershell -ExecutionPolicy Bypass -File scripts/audit_mes_tags.ps1 -Path ".\Con
 # 8. Cross-Reference Validator: Validates all profile references across files
 powershell -ExecutionPolicy Bypass -File scripts/audit_mes_references.ps1 -Path ".\Content\Data" -WarnOrphans -SkipPrefabs
 
-# 9. Scaffolding Generator: Creates production-ready encounter profiles
+# 9. Prefab & Binary Cache Auditor: Checks SubtypeId vs filename and purges stale .sbcB5 caches
+powershell -ExecutionPolicy Bypass -File scripts/audit_prefabs.ps1 -Path ".\Data\Prefabs" -CleanStaleB5
+
+# 10. Scaffolding Generator: Creates production-ready encounter profiles
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix MYMOD -Name ScrapWreck -Faction SPRT
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ConvoyLeaderEscort -ModPrefix MYMOD -Name CargoFreighter -Faction SPRT
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicZoneLadder -ModPrefix MYMOD -Name ContestedTerritory

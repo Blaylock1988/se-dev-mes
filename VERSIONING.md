@@ -87,3 +87,4 @@ Whenever a release is cut, follow these steps sequentially:
 > **Never force-push or overwrite a published tag** once public users or automated agents have cloned or downloaded it. Doing so desynchronizes local git clones and breaks package references.
 > 
 > If a bug or omission is discovered immediately after release, publish a **Patch bump (`v1.0.1`)** rather than moving the existing tag.
+

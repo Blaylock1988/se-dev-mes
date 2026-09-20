@@ -161,11 +161,10 @@ flowchart TD
      /MES.BehaviorDebug.Condition.true
      /MES.BehaviorDebug.Action.true
      ```
-   - Engage or shoot the grid to trigger the event.
-   - Run `/MES.IGLBD` and paste the clipboard output to the agent.
-   - The output will identify whether the trigger evaluated false, failed a cooldown check, or threw an action error.
+    - Engage or shoot the grid to trigger the event.
+    - Run `/MES.IGLBD` and paste the clipboard output to the agent.
+    - The output will identify whether the trigger evaluated false, failed a cooldown check, or threw an action error.
 
-3. **Step 3: Disable Debugging After Diagnosis**:
 3. **Step 3: Deep-Dive / Complex Issues (The GameLog File Workflow)**:
    - When issues are intermittent, complex, or the clipboard buffer overflows, instruct the user to route debug output directly into Keen's game log:
      ```
@@ -220,9 +219,44 @@ When troubleshooting encounter loading or execution failures, search `SpaceEngin
 - **Result**: Throws unhandled exception during action processing.
 - **Fix**: Do not use `ChangeBlocksShareModeAll`. Use targeted terminal block actions.
 
+### 6. Prefab SubtypeId vs. File Name Mismatch (Silent Spawn Failure / `Prefab Not Found`)
+- **Cause**: The `SpawnGroup` references a prefab by its SubtypeId (e.g. `<Prefabs><Prefab SubtypeId="MyPatrolDrone">`), but the prefab file on disk has a different internal SubtypeId.
+- **The Critical Rule**: **Space Engineers and MES completely ignore the prefab's file name on disk** (`MyPatrolDrone.sbc`). Spawning resolves *strictly and exclusively* against the `<Id><SubtypeId>` element declared inside the prefab XML:
+  ```xml
+  <Prefabs>
+    <Prefab>
+      <Id>
+        <TypeId>MyObjectBuilder_PrefabDefinition</TypeId>
+        <SubtypeId>MyPatrolDrone</SubtypeId> <!-- MUST MATCH THE SPAWNGROUP -->
+      </Id>
+    ...
+  ```
+- **Symptom**: Spawning silently fails, or `SpaceEngineers.log` reports `Prefab [MyPatrolDrone] was not found in PrefabManager` or `NullReferenceException` in `SpawnProcess`.
+- **Fix**: Verify that the `<SubtypeId>` inside `Data/Prefabs/<FileName>.sbc` matches the `SubtypeId` in your `SpawnGroupDefinition` verbatim.
+
+### 7. The `.sbcB5` Stale Binary Cache Trap
+- **Cause**: When Space Engineers or the Dedicated Server loads a prefab `.sbc` for the first time, it compiles and caches it into a binary `.sbcB5` file in the same `Data/Prefabs/` folder. When a modder subsequently modifies the prefab `.sbc` (updating blocks, changing names, re-exporting, or tweaking weapon mounts), the game frequently **ignores the updated `.sbc` text file and loads the stale `.sbcB5` binary file instead**.
+- **Symptom**:
+  - In-game spawned grids do not reflect recent block changes or terminal renames.
+  - Spawning fails or throws deserialization errors due to outdated grid offsets.
+  - WeaponCore or RivalAI behaviors fail because newly added blocks are missing from the loaded binary cache.
+- **Fix**: **Always delete the `.sbcB5` binary file whenever modifying a prefab.**
+  ```powershell
+  # Remove all stale sbcB5 cache files across prefabs
+  Get-ChildItem -Path "Data/Prefabs" -Filter "*.sbcB5" -Recurse | Remove-Item -Force
+  ```
+  Keen will recompile fresh binary caches from the updated XML on the next world load.
+
+### 8. Spawning As "Nobody" / Inactive AI (Missing or Dead Remote Control)
+- **Cause**: The spawned prefab does not contain an undamaged, operational `MyObjectBuilder_RemoteControl` block, or the Remote Control block is not owned by the spawning NPC faction.
+- **Result**: The grid spawns as unowned ("Nobody") or drifts inertly without executing its RivalAI behavior profile.
+- **Fix**:
+  1. Ensure the prefab contains at least one intact Remote Control block.
+  2. If the prefab has multiple Remote Controls, ensure `[AssignGridControlToFirstRemote:true]` is set in `[MES Spawn]` or the primary Remote Control has priority.
+  3. Ensure ownership is properly assigned via `[FactionOwner:<FactionTag>]` in the `SpawnGroup`.
+
 ---
 
-## 3. Sim-Speed Health & Anti-Clang Physics Mitigations
 ## 5. Sim-Speed Health & Anti-Clang Physics Mitigations
 
 ### A. Voxel Phasing & Solver Saturation

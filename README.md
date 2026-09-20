@@ -185,27 +185,21 @@ powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern Con
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicZoneLadder -ModPrefix MYMOD -Name ContestedTerritory
 
 # 4. Economy Store Grid
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern StoreGrid -ModPrefix MYMOD -Name OutpostTrader -Faction COALITION
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern StoreGrid -ModPrefix MYMOD -Name OutpostTrader -Faction TRAD
 
 # 5. Dynamic State NPC (Dynamic Behavior Subclass & Autopilot Switching)
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicStateNpc -ModPrefix MYMOD -Name PatrolDrone -Faction GAALSIEN
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicStateNpc -ModPrefix MYMOD -Name PatrolDrone -Faction SPRT
 
 # 6. Planetary Installation
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern PlanetaryInstallation -ModPrefix MYMOD -Name OutpostAlpha -Faction GAALSIEN
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern PlanetaryInstallation -ModPrefix MYMOD -Name OutpostAlpha -Faction SPRT
 
 # 7. Combat Drone (Fighter/Strike)
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern CombatDrone -ModPrefix MYMOD -Name HunterKiller -Faction GAALSIEN
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern CombatDrone -ModPrefix MYMOD -Name HunterKiller -Faction SPRT
 
 # 8. Reinforcement Network
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ReinforcementNetwork -ModPrefix MYMOD -Name StrikeNet -Faction GAALSIEN
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ReinforcementNetwork -ModPrefix MYMOD -Name StrikeNet -Faction SPRT
 
 # 9. Boss Encounter (Multi-phase)
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern BossEncounter -ModPrefix MYMOD -Name OverlordCarrier -Faction GAALSIEN
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern BossEncounter -ModPrefix MYMOD -Name OverlordCarrier -Faction SPRT
 ```
 
@@ -219,6 +213,12 @@ powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern Bos
 - **`WaypointNear` / `WaypointFar`**: Unchecked index on `CargoShipWaypoints[0]` crashes the trigger loop if waypoints are empty.
 - **`InsideZone` vs `InsideActiveZone`**: `[Type:InsideZone]` evaluates `true` even when the target zone is deactivated.
 - **Economy Store Grids**: Purchased grids only spawn if registered under a `<FactionType>` with subtype `Builder` in `FactionTypes_Economy.sbc`.
+
+---
+
+## Versioning & Release Policy
+
+This project strictly adheres to **Semantic Versioning (`MAJOR.MINOR.PATCH`)**. For full details on when releases qualify for Patch, Minor, or Major bumps, see [VERSIONING.md](VERSIONING.md).
 
 ---
 

@@ -60,25 +60,31 @@ if ($LASTEXITCODE -ne 0) {
 # Step 3: Synchronize to Global Skill Directory
 Write-Host "`n[3/4] Synchronizing repository to global skill directory..." -ForegroundColor Yellow
 if (Test-Path $globalSkillPath) {
-    # Mirror files
-    Copy-Item -Path "$repoRoot/SKILL.md" -Destination "$globalSkillPath/SKILL.md" -Force
-    Copy-Item -Path "$repoRoot/README.md" -Destination "$globalSkillPath/README.md" -Force
-    if (Test-Path "$repoRoot/VERSIONING.md") {
-        Copy-Item -Path "$repoRoot/VERSIONING.md" -Destination "$globalSkillPath/VERSIONING.md" -Force
-    }
+    $item = Get-Item $globalSkillPath
+    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+        Write-Host "Global skill directory is a live directory junction. All files are automatically in sync!" -ForegroundColor Green
+    } else {
+        # Mirror files
+        Copy-Item -Path "$repoRoot/SKILL.md" -Destination "$globalSkillPath/SKILL.md" -Force
+        Copy-Item -Path "$repoRoot/README.md" -Destination "$globalSkillPath/README.md" -Force
+        if (Test-Path "$repoRoot/VERSIONING.md") {
+            Copy-Item -Path "$repoRoot/VERSIONING.md" -Destination "$globalSkillPath/VERSIONING.md" -Force
+        }
 
-    if (Test-Path "$repoRoot/references") {
-        Copy-Item -Path "$repoRoot/references" -Destination $globalSkillPath -Recurse -Force
+        if (Test-Path "$repoRoot/references") {
+            Copy-Item -Path "$repoRoot/references" -Destination $globalSkillPath -Recurse -Force
+        }
+        if (Test-Path "$repoRoot/examples") {
+            Copy-Item -Path "$repoRoot/examples" -Destination $globalSkillPath -Recurse -Force
+        }
+        if (Test-Path "$repoRoot/scripts") {
+            Copy-Item -Path "$repoRoot/scripts" -Destination $globalSkillPath -Recurse -Force
+        }
+        Write-Host "Global skill directory synchronized successfully." -ForegroundColor Green
     }
-    if (Test-Path "$repoRoot/examples") {
-        Copy-Item -Path "$repoRoot/examples" -Destination $globalSkillPath -Recurse -Force
-    }
-    if (Test-Path "$repoRoot/scripts") {
-        Copy-Item -Path "$repoRoot/scripts" -Destination $globalSkillPath -Recurse -Force
-    }
-    Write-Host "Global skill directory synchronized successfully." -ForegroundColor Green
 } else {
-    Write-Host "[INFO] Global skill path ($globalSkillPath) does not exist yet. Skipping mirror." -ForegroundColor Gray
+    Write-Host "[INFO] Global skill path ($globalSkillPath) does not exist yet. Creating junction..." -ForegroundColor Cyan
+    cmd /c mklink /J "$globalSkillPath" "$repoRoot"
 }
 
 # Step 4: Health Summary

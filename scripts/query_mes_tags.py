@@ -48,10 +48,13 @@ PROFILE_FILES = {
     'MES Manipulation': ['ManipulationProfile.cs'],
     'MES Block Replacement': ['BlockReplacementProfile.cs'],
     'MES Dereliction': ['DerelictionProfile.cs'],
+    'MES Faction Icon': ['FactionIconProfile.cs'],
     'MES Bot Spawn': ['BotSpawnProfile.cs'],
     'MES Replenishment': ['ReplenishmentProfile.cs'],
     'MES Loot': ['LootProfile.cs'],
     'MES Store': ['StoreProfile.cs'],
+    'MES Shipyard': ['ShipyardProfile.cs'],
+    'MES Static Encounter': ['StaticEncounter.cs'],
     'MES SafeZone': ['SafeZoneProfile.cs'],
     'MES Zone': ['Zone.cs'],
     'MES Zone Conditions': ['ZoneConditionsProfile.cs'],
@@ -61,6 +64,7 @@ PROFILE_FILES = {
     'MES Contract Block': ['ContractBlockProfile.cs'],
     'MES Suit Upgrades': ['SuitUpgradesProfile.cs'],
     'MES Prefab Data': ['PrefabDataProfile.cs'],
+    'MES Prefab Gravity': ['PrefabGravityProfile.cs'],
 }
 
 TYPE_MAP = {

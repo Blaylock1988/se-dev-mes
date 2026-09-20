@@ -139,6 +139,7 @@ Used by global session-level events to spawn encounters at precise coordinates:
     [SpawnEncounter:true]
     [SpawnCoords:{X:60487.11 Y:32965.06 Z:44090.29}]
     [SpawnFactionTags:GAALSIEN]
+    [SpawnFactionTags:SPRT]
     [SpawnData:ModPrefix-EventSpawner-Convoy]
   </Description>
 </EntityComponent>

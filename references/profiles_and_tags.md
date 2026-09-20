@@ -171,6 +171,14 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
   - `[AppendNameToBlock:bool]`, `[AppendedName:<string>]` (Note: suffix often fails to apply in MES due to engine bug).
   - `[AddDatapads:bool]`, `[DatapadFileSource:<SubtypeId>]`, `[DatapadCount:<int>]`.
 
+### L. Faction Icon Profiles
+- **Header**: `[MES Faction Icon]`
+- **Purpose**: Bypasses the vanilla `SANDBOX_0_0_0_.sbs` save lock and Keen's default black faction color bug by programmatically updating faction colors via `MyAPIGateway.Session.Factions.EditFaction(...)` in memory during startup (Phase 1).
+- **Key Tags**:
+  - `[Faction:<FactionTag>]`: Target NPC faction tag (e.g. `SPRT`, `TRAD`).
+  - `[Color:{X:<float> Y:<float> Z:<float>}]`: Primary icon/symbol color vector (values 0.0 to 1.0).
+  - `[Background:{X:<float> Y:<float> Z:<float>}]`: Faction icon background color vector (values 0.0 to 1.0).
+
 ---
 
 ## 3. Tag Data Types & Syntax Reference

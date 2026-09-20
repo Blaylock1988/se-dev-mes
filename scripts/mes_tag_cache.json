@@ -1,10 +1,10 @@
 {
   "metadata": {
-    "generated_at": "2026-09-20T06:03:55.577904+00:00",
+    "generated_at": "2026-09-20T06:42:28.417565+00:00",
     "mes_path": "C:\\Users\\blayl\\AppData\\Roaming\\SpaceEngineers\\Mods\\Modular-Encounters-Systems\\Data\\Scripts\\ModularEncountersSystems",
-    "source_hash": "9c4fd7687f159d2e",
-    "total_tags": 1689,
-    "total_profiles": 32
+    "source_hash": "fbe05ea696620192",
+    "total_tags": 1744,
+    "total_profiles": 36
   },
   "tags": [
     {
@@ -1560,6 +1560,27 @@
       "type": "custom / block parse",
       "file": "EventGroupProfile.cs",
       "line": 47
+    },
+    {
+      "profile": "MES Faction Icon",
+      "tag": "Faction",
+      "type": "string",
+      "file": "FactionIconProfile.cs",
+      "line": 31
+    },
+    {
+      "profile": "MES Faction Icon",
+      "tag": "Color",
+      "type": "Vector3D ({X:0 Y:0 Z:0})",
+      "file": "FactionIconProfile.cs",
+      "line": 33
+    },
+    {
+      "profile": "MES Faction Icon",
+      "tag": "Background",
+      "type": "Vector3D ({X:0 Y:0 Z:0})",
+      "file": "FactionIconProfile.cs",
+      "line": 34
     },
     {
       "profile": "MES Loot",
@@ -3137,6 +3158,27 @@
       "line": 76
     },
     {
+      "profile": "MES Prefab Gravity",
+      "tag": "PrefabIds",
+      "type": "List<string> (comma-separated)",
+      "file": "PrefabGravityProfile.cs",
+      "line": 37
+    },
+    {
+      "profile": "MES Prefab Gravity",
+      "tag": "MaxGravityAtmo",
+      "type": "float",
+      "file": "PrefabGravityProfile.cs",
+      "line": 38
+    },
+    {
+      "profile": "MES Prefab Gravity",
+      "tag": "MaxGravityVacuum",
+      "type": "float",
+      "file": "PrefabGravityProfile.cs",
+      "line": 39
+    },
+    {
       "profile": "MES Replenishment",
       "tag": "RestrictedItems",
       "type": "custom / block parse",
@@ -3282,6 +3324,251 @@
       "type": "TagSafeZoneActionEnumCheck",
       "file": "SafezoneProfile.cs",
       "line": 113
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "BlockName",
+      "type": "string",
+      "file": "ShipyardProfile.cs",
+      "line": 113
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "InteractionRadius",
+      "type": "double",
+      "file": "ShipyardProfile.cs",
+      "line": 115
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "MinReputation",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 116
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "ReputationNeededForDiscount",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 118
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "AllowBlueprintBuilding",
+      "type": "bool (true/false)",
+      "file": "ShipyardProfile.cs",
+      "line": 120
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "BlueprintBuildingSmallGridBlockLimit",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 121
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "BlueprintBuildingLargeGridBlockLimit",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 122
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "BlueprintBuildingCommissionPercentage",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 123
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "BlueprintBuildingReputationDiscount",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 124
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "AllowScrapPurchasing",
+      "type": "bool (true/false)",
+      "file": "ShipyardProfile.cs",
+      "line": 126
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "ScrapPurchasingSmallGridBlockLimit",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 127
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "ScrapPurchasingLargeGridBlockLimit",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 128
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "ScrapPurchasingIncludeInventory",
+      "type": "bool (true/false)",
+      "file": "ShipyardProfile.cs",
+      "line": 129
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "ScrapPurchasingMaxPercentageValue",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 130
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "ScrapPurchasingReputationDiscount",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 131
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "AllowRepairAndConstruction",
+      "type": "bool (true/false)",
+      "file": "ShipyardProfile.cs",
+      "line": 133
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "RepairAndConstructionSmallGridBlockLimit",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 134
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "RepairAndConstructionLargeGridBlockLimit",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 135
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "RepairAndConstructionCommissionPercentage",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 136
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "RepairAndConstructionReputationDiscount",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 137
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "RepairAndConstructionExcludedComponentIds",
+      "type": "List<string> (comma-separated)",
+      "file": "ShipyardProfile.cs",
+      "line": 138
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "AllowCustomReplacement",
+      "type": "bool (true/false)",
+      "file": "ShipyardProfile.cs",
+      "line": 141
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "CustomReplacementSmallGridBlockLimit",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 142
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "CustomReplacementLargeGridBlockLimit",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 143
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "CustomReplacementCommissionPercentage",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 144
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "CustomReplacementReputationDiscount",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 145
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "OldBlock",
+      "type": "TagMyDefIdCheck",
+      "file": "ShipyardProfile.cs",
+      "line": 146
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "NewBlock",
+      "type": "TagMyDefIdCheck",
+      "file": "ShipyardProfile.cs",
+      "line": 147
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "ReplaceBlockReference",
+      "type": "TagMDIDictionaryCheck",
+      "file": "ShipyardProfile.cs",
+      "line": 148
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "BlockReplacementProfileIds",
+      "type": "List<string> (comma-separated)",
+      "file": "ShipyardProfile.cs",
+      "line": 149
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "AllowGridTakeover",
+      "type": "bool (true/false)",
+      "file": "ShipyardProfile.cs",
+      "line": 151
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "GridTakeoverSmallGridBlockLimit",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 152
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "GridTakeoverLargeGridBlockLimit",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 153
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "GridTakeoverPricePerComputerMultiplier",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 154
+    },
+    {
+      "profile": "MES Shipyard",
+      "tag": "GridTakeoverReputationDiscount",
+      "type": "int",
+      "file": "ShipyardProfile.cs",
+      "line": 155
     },
     {
       "profile": "MES Spawn Conditions",
@@ -5186,6 +5473,104 @@
       "type": "bool (true/false)",
       "file": "SpawnConditionsProfile.cs",
       "line": 988
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "CheckSpawnConditions",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 459
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "SpawnGroupName",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 466
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "Faction",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 473
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "TriggerCoords",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 480
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "TriggerRadius",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 487
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "UseTimeLimit",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 494
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "TimeLimit",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 501
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "UseExactSpawnLocation",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 508
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "ExactLocationCoords",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 515
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "ExactLocationForward",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 522
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "ExactLocationUp",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 529
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "TimeBetweenSpawnAttempts",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 536
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "UseMaxSpawnAttempts",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 543
+    },
+    {
+      "profile": "MES Static Encounter",
+      "tag": "MaxSpawnAttempts",
+      "type": "custom / block parse",
+      "file": "StaticEncounter.cs",
+      "line": 550
     },
     {
       "profile": "MES Store",

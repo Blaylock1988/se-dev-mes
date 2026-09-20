@@ -48,6 +48,7 @@ To optimize AI agent tokens and preserve context window space, detailed guides a
 | [manipulation_and_dereliction.md](references/manipulation_and_dereliction.md) | Block replacements, weapon randomizer (`<Public>true</Public>`), dereliction, AiEnabled bots, and ContainerTypes loot tables. |
 | [events_and_zones.md](references/events_and_zones.md) | MES Events vs RivalAI Triggers, boolean master gates, zero-stripping bug, dynamic zones. |
 | [economy_and_stores.md](references/economy_and_stores.md) | 3-part store grid sales chain (`Builder` subtype rule), 124m clearance, automated store refresh. |
+| [economy_and_stores.md](references/economy_and_stores.md) | 3-part store grid sales chain (`Builder` subtype rule), 124m clearance, dual icon/tooltip declarations, automated store refresh. |
 | [third_party_integrations.md](references/third_party_integrations.md) | WeaponCore (800m clamp, dynamic replacement range desync, fixed weapon timer proxy, lead prediction disaster, NPC weapon handicap architecture), Defense Shields, AiEnabled, Water Mod. |
 | [diagnostics_and_troubleshooting.md](references/diagnostics_and_troubleshooting.md) | In-game admin commands, log error signatures, sim-speed optimization, anti-clang mitigations. |
 | [sbc_xml_editing_guide.md](references/sbc_xml_editing_guide.md) | IDE setup (`*.sbc -> xml`), `<Description>` protection, encoding rules, safe formatting. |
@@ -253,6 +254,7 @@ if (!preserveZero)
 | Token | Replaced With | Context Source | Supported Environments |
 | :--- | :--- | :--- | :--- |
 | `{Faction}` | Initial NPC faction tag (e.g. `GAALSIEN`) | `npcData.InitialFaction` | RivalAI Grid Triggers only |
+| `{Faction}` | Initial NPC faction tag (e.g. `SPRT`) | `npcData.InitialFaction` | RivalAI Grid Triggers only |
 | `{SpawnGroupName}` | Name of the SpawnGroup that spawned grid | `npcData.SpawnGroupName` | RivalAI Grid Triggers only |
 | `{Position}` | Formatted `{X:... Y:... Z:...}` coordinates | Remote Control block position | RivalAI Grid Triggers only |
 | `{EventInstance}` | Unique ID of spawning event instance | `npcData.EventInstanceId` | RivalAI Grid Triggers only |
@@ -317,6 +319,8 @@ powershell -ExecutionPolicy Bypass -File scripts/audit_mes_references.ps1 -Path 
 # 9. Scaffolding Generator: Creates production-ready encounter profiles
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix MYMOD -Name IronDrifter -Faction DERELICT
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ConvoyLeaderEscort -ModPrefix MYMOD -Name DesertHauler -Faction GAALSIEN
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix MYMOD -Name ScrapWreck -Faction SPRT
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ConvoyLeaderEscort -ModPrefix MYMOD -Name CargoFreighter -Faction SPRT
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicZoneLadder -ModPrefix MYMOD -Name ContestedTerritory
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern StoreGrid -ModPrefix MYMOD -Name OutpostTrader -Faction COALITION
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicStateNpc -ModPrefix MYMOD -Name PatrolDrone -Faction GAALSIEN
@@ -324,6 +328,12 @@ powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern Pla
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern CombatDrone -ModPrefix MYMOD -Name HunterKiller -Faction GAALSIEN
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ReinforcementNetwork -ModPrefix MYMOD -Name StrikeNet -Faction GAALSIEN
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern BossEncounter -ModPrefix MYMOD -Name OverlordCarrier -Faction GAALSIEN
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern StoreGrid -ModPrefix MYMOD -Name OutpostTrader -Faction TRAD
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicStateNpc -ModPrefix MYMOD -Name PatrolDrone -Faction SPRT
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern PlanetaryInstallation -ModPrefix MYMOD -Name OutpostAlpha -Faction SPRT
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern CombatDrone -ModPrefix MYMOD -Name HunterKiller -Faction SPRT
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ReinforcementNetwork -ModPrefix MYMOD -Name StrikeNet -Faction SPRT
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern BossEncounter -ModPrefix MYMOD -Name OverlordCarrier -Faction SPRT
 ```
 
 ### B. In-Game Diagnostics & Agent Troubleshooting Protocol

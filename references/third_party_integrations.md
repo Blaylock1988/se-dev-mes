@@ -16,9 +16,15 @@ MES contains built-in hooks for WeaponCore grids, but deep architectural mismatc
 - **[HARD] The Bug**: When weapons are dynamically swapped via `[UseWeaponRandomizer:true]` or `[BlockReplacementProfiles]`, `SetWeaponsToMaxRange:true` frequently **fails to unclamp the weapons**.
   - In `WeaponRandomizer.cs:1321`, MES queries `APIs.WeaponCore.GetMaxWeaponRange(termBlock, 0)`.
   - Because WeaponCore registers newly spawned blocks asynchronously, the API call often returns `0` or default range before WC finishes registration.
+  - Furthermore, `GetMaxWeaponRange` in WC returns the current slider range (`MaxTargetDistance`) rather than the true maximum range, so clamping to 800m causes WC to report 800m as the maximum.
   - MES permanently caches this stale value in `DefaultRangeWC` (`WeaponRandomizer.cs:1322`), locking the replaced weapon at 800m or 0m permanently.
-  - Furthermore, dynamically replaced blocks lose all WeaponCore terminal/GUI settings saved in the original prefab blueprint.
-- **Production Rule**: For high-stakes combat encounters, **do not dynamically replace primary WeaponCore weapons**. Bake the exact WeaponCore weapon blocks directly into the prefab blueprint with their ranges, targeting modes, and fire rates pre-configured.
+  - Dynamically replaced blocks also lose any WeaponCore terminal/GUI settings saved in the original prefab blueprint.
+- **[HARD] The Engine Fix**:
+  - **Startup Pre-Caching**: In `AddonManager.WeaponCoreCallback()`, pre-populate `DefaultRangeWC` from `APIs.WeaponCore.WeaponDefinitions` at world startup to eliminate runtime spawn race conditions entirely.
+  - **Definition Fallback**: In `WeaponRandomizer.cs`, compute max range directly from `APIs.WeaponCore.WeaponDefinitions` (`GetWeaponCoreDefinitionMaxRange`) without entity dependencies.
+  - **Fail-Safe Unclamping**: Pass `float.MaxValue` when `useMax` is `true` if range is unresolvable, forcing WeaponCore's internal clamp to set the true maximum range and preventing 0m locking.
+  - **Cache Guard**: Never cache `<= 0` in `DefaultRangeWC`.
+- **Production Rule**: When designing high-stakes combat encounters on vanilla/unpatched MES builds, **do not dynamically replace primary WeaponCore weapons**. Bake the exact WeaponCore weapon blocks directly into the prefab blueprint with their ranges, targeting modes, and fire rates pre-configured.
 
 ### C. Getting MES to Fire WC Fixed Weapons (Prefab Setup & Proxying)
 - **Prefab Pre-Configuration**: Fixed forward-firing weapons must have their WeaponCore settings properly configured before saving the blueprint:

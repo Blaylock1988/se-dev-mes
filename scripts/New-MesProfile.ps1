@@ -23,10 +23,13 @@
     Pattern type: 'DefendedWreck', 'ConvoyLeaderEscort', 'DynamicZoneLadder', 'StoreGrid', 'DynamicStateNpc', 'PlanetaryInstallation', 'CombatDrone', 'ReinforcementNetwork', 'BossEncounter'.
 .PARAMETER ModPrefix
     Mod prefix to prevent profile collisions (e.g. 'GVK', 'MES').
+    Mod prefix to prevent profile collisions (e.g. 'MYMOD', 'MES').
 .PARAMETER Name
     Name identifier for the encounter/grid (e.g. 'IronDrifter', 'KharakConvoy').
+    Name identifier for the encounter/grid (e.g. 'ScrapWreck', 'CargoConvoy').
 .PARAMETER Faction
     Faction tag (e.g. 'DERELICT', 'GAALSIEN', 'COALITION').
+    Faction tag (e.g. 'SPRT', 'TRAD', 'CIV').
 .PARAMETER OutFile
     Target .sbc file path. Defaults to .\<ModPrefix>_<Name>_<Pattern>.sbc.
 #>

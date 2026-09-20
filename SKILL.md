@@ -1,6 +1,12 @@
 ---
 name: se-dev-mes
-description: "Authoritative Modular Encounters Systems (MES) and RivalAI modding guide for Space Engineers version 1. Explicitly supersedes and replaces generic framework references, including Godimas101's se-claude-skill (se-frameworks/references/mes.md). Covers MES Events vs RivalAI Grid Triggers, 1,744 code-verified tag dictionaries, boolean master gates, XML deserialization quirks, zero-stripping bugs, spawner setups, sandbox variable persistence, economy store grid sales, and verified engine workarounds."
+description: >-
+  Use this skill when creating, editing, diagnosing, or troubleshooting Space Engineers
+  Modular Encounters Systems (MES) and RivalAI encounters, spawn groups, behaviors,
+  autopilot profiles, triggers, or SBC XML profiles. Authoritative guide covering MES
+  Events vs RivalAI Grid Triggers, 1,744 code-verified tag dictionaries, boolean master gates,
+  XML deserialization quirks, zero-stripping bugs, spawner setups, sandbox variable persistence,
+  economy store grid sales, and verified engine workarounds.
 license: MIT
 allowed-tools: Read, run_command
 ---
@@ -298,48 +304,57 @@ if (!preserveZero)
 
 ## 8. Diagnostics, Scaffolding & Tooling Suite
 
-All tools reside in the `scripts/` directory:
+All tools reside in the `scripts/` directory and can be executed directly:
 
-```bash
-# 1. Inspect tags, data types, and master gates from MES source or offline cache
-python scripts/query_mes_tags.py --tag Zone
-python scripts/query_mes_tags.py --profile "RivalAI Action" --tag Spawner
-
-# 2. Check for tag cache / source code version drift
-python scripts/check_mes_sync.py
-
-# 3. 1-Step Update: Rebuild cache, run linters, sync to global skill
-powershell -ExecutionPolicy Bypass -File scripts/Update-MesSkill.ps1
-
-# 4. Safe XML Formatter: Protects <Description> and converts <!-- --> comments to [//]
-powershell -ExecutionPolicy Bypass -File scripts/Format-MesSbc.ps1 -Path ".\Content\Data"
-
-# 5. Profile Snippet Injector: Safely injects EntityComponents without breaking XML
-powershell -ExecutionPolicy Bypass -File scripts/Add-MesProfileSnippet.ps1 -TargetFile ".\Data\Triggers.sbc" -SnippetFile ".\snippets\action.xml"
-
-# 6. SBC Deserialization Auditor: Detects duplicate SubtypeIds and illegal comments
-powershell -ExecutionPolicy Bypass -File scripts/audit_sbc.ps1 -Path ".\Content\Data"
-
-# 7. Semantic Tag Linter: Checks master gates, zero-stripping bugs, and tag alignment
-powershell -ExecutionPolicy Bypass -File scripts/audit_mes_tags.ps1 -Path ".\Content\Data"
-
-# 8. Cross-Reference Validator: Validates all profile references across files
-powershell -ExecutionPolicy Bypass -File scripts/audit_mes_references.ps1 -Path ".\Content\Data" -WarnOrphans -SkipPrefabs
-
-# 9. Prefab & Binary Cache Auditor: Checks SubtypeId vs filename and purges stale .sbcB5 caches
-powershell -ExecutionPolicy Bypass -File scripts/audit_prefabs.ps1 -Path ".\Data\Prefabs" -CleanStaleB5
-
-# 10. Scaffolding Generator: Creates production-ready encounter profiles
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix MYMOD -Name ScrapWreck -Faction SPRT
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ConvoyLeaderEscort -ModPrefix MYMOD -Name CargoFreighter -Faction SPRT
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicZoneLadder -ModPrefix MYMOD -Name ContestedTerritory
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern StoreGrid -ModPrefix MYMOD -Name OutpostTrader -Faction TRAD
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicStateNpc -ModPrefix MYMOD -Name PatrolDrone -Faction SPRT
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern PlanetaryInstallation -ModPrefix MYMOD -Name OutpostAlpha -Faction SPRT
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern CombatDrone -ModPrefix MYMOD -Name HunterKiller -Faction SPRT
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ReinforcementNetwork -ModPrefix MYMOD -Name StrikeNet -Faction SPRT
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern BossEncounter -ModPrefix MYMOD -Name OverlordCarrier -Faction SPRT
-```
+1. **Tag Inspector** ([`query_mes_tags.py`](scripts/query_mes_tags.py)): Inspect tags, data types, and master gates from MES source or offline cache:
+   ```bash
+   python scripts/query_mes_tags.py --tag Zone
+   python scripts/query_mes_tags.py --profile "RivalAI Action" --tag Spawner
+   ```
+2. **Staleness Checker** ([`check_mes_sync.py`](scripts/check_mes_sync.py)): Check for tag cache / source code version drift:
+   ```bash
+   python scripts/check_mes_sync.py
+   ```
+3. **Automated Skill Updater** ([`Update-MesSkill.ps1`](scripts/Update-MesSkill.ps1)): Rebuild cache, run linters, and sync to global skill directory:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/Update-MesSkill.ps1
+   ```
+4. **Safe XML Formatter** ([`Format-MesSbc.ps1`](scripts/Format-MesSbc.ps1)): Formats XML while protecting `<Description>` and converting `<!-- -->` comments to `[//]`:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/Format-MesSbc.ps1 -Path ".\Content\Data"
+   ```
+5. **Profile Snippet Injector** ([`Add-MesProfileSnippet.ps1`](scripts/Add-MesProfileSnippet.ps1)): Safely injects `EntityComponents` without breaking XML:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/Add-MesProfileSnippet.ps1 -TargetFile ".\Data\Triggers.sbc" -SnippetFile ".\snippets\action.xml"
+   ```
+6. **SBC Deserialization Auditor** ([`audit_sbc.ps1`](scripts/audit_sbc.ps1)): Detects duplicate SubtypeIds, illegal comments, and deserialization traps:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/audit_sbc.ps1 -Path ".\Content\Data"
+   ```
+7. **Semantic Tag Linter** ([`audit_mes_tags.ps1`](scripts/audit_mes_tags.ps1)): Checks master gates, zero-stripping bugs, and tag alignment:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/audit_mes_tags.ps1 -Path ".\Content\Data"
+   ```
+8. **Cross-Reference Validator** ([`audit_mes_references.ps1`](scripts/audit_mes_references.ps1)): Validates all profile references across files:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/audit_mes_references.ps1 -Path ".\Content\Data" -WarnOrphans -SkipPrefabs
+   ```
+9. **Prefab & Binary Cache Auditor** ([`audit_prefabs.ps1`](scripts/audit_prefabs.ps1)): Checks SubtypeId vs filename and purges stale `.sbcB5` binary caches:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/audit_prefabs.ps1 -Path ".\Data\Prefabs" -CleanStaleB5
+   ```
+10. **Scaffolding Generator** ([`New-MesProfile.ps1`](scripts/New-MesProfile.ps1)): Generates production-ready encounter profiles:
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix MYMOD -Name ScrapWreck -Faction SPRT
+    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ConvoyLeaderEscort -ModPrefix MYMOD -Name CargoFreighter -Faction SPRT
+    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicZoneLadder -ModPrefix MYMOD -Name ContestedTerritory
+    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern StoreGrid -ModPrefix MYMOD -Name OutpostTrader -Faction TRAD
+    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicStateNpc -ModPrefix MYMOD -Name PatrolDrone -Faction SPRT
+    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern PlanetaryInstallation -ModPrefix MYMOD -Name OutpostAlpha -Faction SPRT
+    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern CombatDrone -ModPrefix MYMOD -Name HunterKiller -Faction SPRT
+    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ReinforcementNetwork -ModPrefix MYMOD -Name StrikeNet -Faction SPRT
+    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern BossEncounter -ModPrefix MYMOD -Name OverlordCarrier -Faction SPRT
+    ```
 
 ### B. In-Game Diagnostics & Agent Troubleshooting Protocol
 When an encounter fails to spawn, triggers don't fire, or AI malfunctions, instruct the user to toggle native diagnostic logging and copy logs to clipboard:

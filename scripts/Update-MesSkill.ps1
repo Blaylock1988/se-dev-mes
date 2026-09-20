@@ -57,6 +57,9 @@ if (Test-Path $globalSkillPath) {
     # Mirror files
     Copy-Item -Path "$repoRoot/SKILL.md" -Destination "$globalSkillPath/SKILL.md" -Force
     Copy-Item -Path "$repoRoot/README.md" -Destination "$globalSkillPath/README.md" -Force
+    if (Test-Path "$repoRoot/VERSIONING.md") {
+        Copy-Item -Path "$repoRoot/VERSIONING.md" -Destination "$globalSkillPath/VERSIONING.md" -Force
+    }
 
     if (Test-Path "$repoRoot/references") {
         Copy-Item -Path "$repoRoot/references" -Destination $globalSkillPath -Recurse -Force

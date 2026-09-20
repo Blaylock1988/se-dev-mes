@@ -4,24 +4,80 @@
 [![Space Engineers](https://img.shields.io/badge/Space%20Engineers-v1-blue.svg)](https://www.spaceengineersgame.com/)
 [![Modular Encounters Systems](https://img.shields.io/badge/MES-v2.x-orange.svg)](https://steamcommunity.com/sharedfiles/filedetails/?id=1521905890)
 
-A comprehensive AI agent skill, developer reference, and automated diagnostics suite for modding **Modular Encounters Systems (MES)** and **RivalAI** in Space Engineers.
+A comprehensive, production-grade developer skill, reference library, and automated diagnostics suite for modding **Modular Encounters Systems (MES)** and **RivalAI** in Space Engineers.
 
-This skill equips AI assistants (Antigravity, Claude Code, Cursor, Cline) and modders with verified engine constraints, syntax rules, pitfall detection, and automated scaffolding.
+Equips AI coding assistants (Antigravity, Claude Code, Cursor, Cline) and encounter modders with source-verified engine constraints, syntax rules, pitfall detection, safe XML tooling, and automated scaffolding.
 
 ---
 
-## Features
+## Background & Development
 
-- **Source-Verified Invariants**: Every rule is classified as **`[HARD]`** (code-verified against local MES C# source and Keen binaries) or **`[SOFT]`** (field-tested operational heuristics).
-- **XML Deserializer Safeguards**: Detailed prevention of Keen SBC quirks (single `<SubtypeId>` per `<Id>`, single `<Id>` per `<Prefab>`, and the critical ban on `<!-- -->` comments inside `<Description>`).
-- **Boolean Master-Gate Catalog**: Comprehensive tables covering master gates for MES Event Actions, Event Conditions, and RivalAI profiles.
-- **Token Scope Matrix**: Precise resolution contexts for `IdsReplacer` tokens (`{Faction}`, `{Position}`, `{PlayerName}`, etc.) across grid-bound and session-bound execution.
-- **Diagnostic Toolset**:
-  - `query_mes_tags.py`: CLI tool querying tag definitions, expected data types, and parent profiles directly from MES C# source.
-  - `audit_sbc.ps1`: Automated XML deserialization auditor.
-  - `audit_mes_tags.ps1`: Semantic tag linter checking for zero-stripping bugs, broken action tags, master gates, and list alignment.
-  - `audit_mes_references.ps1`: Cross-file reference validator ensuring all referenced profiles exist and match casing.
-  - `New-MesProfile.ps1`: Scaffolding generator for production-ready encounter profiles.
+This skill was created by **Mike Dude**, born out of years of real-world server operation, encounter design, and combat balancing on the **GV: Deserts of Kharak (GVK)** rover-PvPvE server.
+
+To ensure complete accuracy and eliminate the guesswork that often plagues Space Engineers modding, it was developed in close pair-programming collaboration with **Google DeepMind's Gemini (Antigravity)**. Every tag, master gate, parsing behavior, and execution pathway was systematically audited and cross-referenced directly against the local **Modular Encounters Systems (MES)** and **RivalAI** C# source code.
+
+---
+
+## Why Use `se-dev-mes`?
+
+The Space Engineers AI modding community has produced notable reference skills, such as Godimas101's [`se-claude-skill`](https://github.com/Godimas101/se-claude-skill) (`se-frameworks/references/mes.md`), which did excellent pioneering work in establishing framework references for AI coding assistants.
+
+**`se-dev-mes`** builds upon and elevates that foundation:
+
+1. **Codebase Precedence Principle**:
+   - Online wikis and guides are notoriously outdated, contain errors, or describe legacy workarounds. Nothing takes precedence over the MES C# codebase.
+   - Every rule is classified as **`[HARD]`** (code-verified against local C# source and Keen binaries) or **`[SOFT]`** (field-tested operational heuristics).
+   - Documents specific C# source line numbers for engine bugs (e.g. `ActionSystem.cs:2412` index bug, `TriggerChecks.cs:77` `CargoShipWaypoints` out-of-bounds crash).
+2. **Automated Staleness Detection & 1-Step Updates**:
+   - Includes `check_mes_sync.py` to detect when the local MES install updates.
+   - Includes `Update-MesSkill.ps1` for a 1-step workflow that updates the 1,600+ tag cache, tests examples, and syncs across environments.
+3. **Token Optimization & Progressive Disclosure for AI Agents**:
+   - Lean root `SKILL.md` keeps AI agent token usage minimal while providing high-density mental models.
+   - 9 dedicated reference documents in `references/` are loaded on-demand only when relevant.
+4. **Safe XML Tooling (Eliminating Deserializer Crashes)**:
+   - Several existing guides include standard XML comments (`<!-- ... -->`) inside `<Description>` tags. In Space Engineers, Keen's `ReadElementString()` fails on comments, throwing `System.Xml.XmlException` and causing the game to skip loading the mod entirely (`MOD_CRITICAL_ERROR`).
+   - `se-dev-mes` provides `Format-MesSbc.ps1` and `Add-MesProfileSnippet.ps1` to protect `<Description>` tags and auto-convert comments to RivalAI `[//Comment]` syntax.
+5. **Real-World Production Architectures**:
+   - Incorporates real-world patterns from Enenra's `mes-shared-behaviors` (Role vs. CombatType state machines), `GFA - MES Utilities` (courier logistics networks), Mike Dude's `GVK_Derelicts` (planetary convoys & store automation), and `Trade Operators Coalition` (safezone stations).
+6. **9 Production Scaffolding Patterns**:
+   - `New-MesProfile.ps1` generates full boilerplate encounters, from defended wrecks and convoy escorts to boss encounters, combat drones, and reinforcement networks.
+
+---
+
+## Repository Structure
+
+```
+se-dev-mes/
+├── SKILL.md                                # Root AI skill definition (lean, progressive disclosure)
+├── README.md                               # Project documentation
+├── references/                             # Deep-dive reference library (on-demand loading)
+│   ├── profiles_and_tags.md                # 30+ profile types, registration phases, tag types
+│   ├── spawning_and_conditions.md          # Spawners, environment gates, threat scoring
+│   ├── behaviors_and_autopilot.md          # 11 behavior subclasses, Role vs. CombatType, autopilot
+│   ├── manipulation_and_dereliction.md     # Block replacement, weapon randomizer, dereliction
+│   ├── events_and_zones.md                 # MES Events vs Triggers, master gates, zero-stripping
+│   ├── economy_and_stores.md               # 3-part store grid sales, 124m clearance, store refresh
+│   ├── third_party_integrations.md         # WeaponCore (800m clamp), Shields, AiEnabled, Water Mod
+│   ├── diagnostics_and_troubleshooting.md  # Admin commands, error signatures, sim-speed, anti-clang
+│   └── sbc_xml_editing_guide.md            # IDE setup (*.sbc -> xml), <Description> rules, formatting
+├── examples/                               # Production-tested workshop implementations
+│   ├── role_combattype_state_machine.sbc   # Enenra MSB Role + CombatType state machine
+│   ├── courier_logistics_network.sbc       # Enenra GFA parent-child courier logistics network
+│   ├── planetary_convoy_escort.sbc         # Mike Dude GVK convoy with event-based spawning & escorts
+│   ├── automated_economy_store.sbc         # Mike Dude GVK automated store inventory refresh loop
+│   └── merchant_safezone_station.sbc       # TOC safezone station ([CreateSafeZone:true]) + merchant
+└── scripts/                                # Automation, diagnostics, and scaffolding suite
+    ├── mes_tag_cache.json                  # Offline database of 1,600+ tags across 32 profiles
+    ├── query_mes_tags.py                   # Tag inspector CLI (search local MES source or cache)
+    ├── check_mes_sync.py                   # Automated staleness & version drift detector
+    ├── Update-MesSkill.ps1                 # 1-step updater (rebuilds cache, runs tests, syncs global)
+    ├── Format-MesSbc.ps1                   # Safe XML formatter protecting <Description> & comments
+    ├── Add-MesProfileSnippet.ps1           # Safe profile snippet injector for SBC files
+    ├── audit_sbc.ps1                       # SBC XML deserialization auditor
+    ├── audit_mes_tags.ps1                  # Semantic tag linter (master gates, zero-stripping)
+    ├── audit_mes_references.ps1            # Cross-file reference validator (-SkipPrefabs support)
+    └── New-MesProfile.ps1                  # Boilerplate generator (9 encounter patterns)
+```
 
 ---
 
@@ -47,21 +103,48 @@ git clone https://github.com/<your-username>/se-dev-mes.git .skills/se-dev-mes
 
 ---
 
-## Tooling & Scripts
+## Tooling & Automation Guide
 
-All tools reside in the `scripts/` directory:
+All scripts reside in the `scripts/` directory:
 
 ### 1. Tag Inspector CLI (`query_mes_tags.py`)
-Searches the local MES source code for tag names, expected data types, and line references.
+Queries tag definitions, data types, and parent profiles from the local MES C# source code or offline cache:
 ```bash
 # Query any tag containing 'Zone'
 python scripts/query_mes_tags.py --tag Zone
 
 # Search specifically within RivalAI Action profiles
 python scripts/query_mes_tags.py --profile "RivalAI Action" --tag Spawner
+
+# Output structured JSON
+python scripts/query_mes_tags.py --tag Weapon --json
 ```
 
-### 2. SBC XML Deserialization Auditor (`audit_sbc.ps1`)
+### 2. Staleness & Version Drift Detector (`check_mes_sync.py`)
+Compares the offline tag cache against the local MES source code to detect updates:
+```bash
+python scripts/check_mes_sync.py
+```
+
+### 3. One-Step Skill Updater (`Update-MesSkill.ps1`)
+Runs when MES is updated by maintainers to keep the skill 100% current:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Update-MesSkill.ps1
+```
+
+### 4. Safe XML Formatter (`Format-MesSbc.ps1`)
+Formats XML while protecting `<Description>` tags from illegal line-wrapping and converting `<!-- -->` comments into `[//]`:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Format-MesSbc.ps1 -Path ".\Content\Data"
+```
+
+### 5. Profile Snippet Injector (`Add-MesProfileSnippet.ps1`)
+Safely injects new `EntityComponent` profiles into existing `.sbc` files without regex corruption:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Add-MesProfileSnippet.ps1 -TargetFile ".\Data\Triggers.sbc" -SnippetFile ".\snippets\action.xml"
+```
+
+### 6. SBC XML Deserialization Auditor (`audit_sbc.ps1`)
 Checks all `.sbc` files for fatal Keen deserializer traps:
 - Duplicate `<SubtypeId>` within `<Id>` blocks.
 - Duplicate `<Id>` attributes inside `<Prefab>`.
@@ -70,7 +153,7 @@ Checks all `.sbc` files for fatal Keen deserializer traps:
 powershell -ExecutionPolicy Bypass -File scripts/audit_sbc.ps1 -Path ".\Content\Data"
 ```
 
-### 3. MES Tag & Master-Gate Linter (`audit_mes_tags.ps1`)
+### 7. MES Tag & Master-Gate Linter (`audit_mes_tags.ps1`)
 Detects runtime pitfalls:
 - Zero-stripping bug in `CustomCountersTargets` / `CustomSandboxCountersTargets`.
 - Fatal `WaypointNear` / `WaypointFar` index crashes.
@@ -81,26 +164,41 @@ Detects runtime pitfalls:
 powershell -ExecutionPolicy Bypass -File scripts/audit_mes_tags.ps1 -Path ".\Content\Data"
 ```
 
-### 4. Cross-Reference Validator (`audit_mes_references.ps1`)
+### 8. Cross-Reference Validator (`audit_mes_references.ps1`)
 Validates that every referenced trigger, action, condition, spawner, spawn group, and prefab exists across the mod files:
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/audit_mes_references.ps1 -Path ".\Content\Data" -WarnOrphans
+powershell -ExecutionPolicy Bypass -File scripts/audit_mes_references.ps1 -Path ".\Content\Data" -WarnOrphans -SkipPrefabs
 ```
 
-### 5. Profile Scaffolding Generator (`New-MesProfile.ps1`)
-Generates boilerplate `.sbc` files following defensive engineering patterns:
+### 9. Profile Scaffolding Generator (`New-MesProfile.ps1`)
+Generates production-ready `.sbc` files for 9 standard encounter patterns:
 ```powershell
-# Defended Wreck encounter (dereliction, proximity warning, defense drone spawner, cleanup)
+# 1. Defended Wreck
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix MYMOD -Name IronDrifter -Faction DERELICT
 
-# Convoy Leader + Escort (CargoShip leader, escort follower with formation break, 800m range unclamp)
+# 2. Convoy Leader + Escort
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ConvoyLeaderEscort -ModPrefix MYMOD -Name DesertHauler -Faction GAALSIEN
 
-# Dynamic Zone Ladder (persistent zone with zero-stripping-safe counter expansion ladder)
-powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicZoneLadder -ModPrefix MYMOD -Name ContestedZone
+# 3. Dynamic Zone Ladder
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicZoneLadder -ModPrefix MYMOD -Name ContestedTerritory
 
-# Store Grid (vanilla StoreItem, Builder subtype registration, and MES Store profile)
+# 4. Economy Store Grid
 powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern StoreGrid -ModPrefix MYMOD -Name OutpostTrader -Faction COALITION
+
+# 5. Dynamic State NPC (Dynamic Behavior Subclass & Autopilot Switching)
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicStateNpc -ModPrefix MYMOD -Name PatrolDrone -Faction GAALSIEN
+
+# 6. Planetary Installation
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern PlanetaryInstallation -ModPrefix MYMOD -Name OutpostAlpha -Faction GAALSIEN
+
+# 7. Combat Drone (Fighter/Strike)
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern CombatDrone -ModPrefix MYMOD -Name HunterKiller -Faction GAALSIEN
+
+# 8. Reinforcement Network
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ReinforcementNetwork -ModPrefix MYMOD -Name StrikeNet -Faction GAALSIEN
+
+# 9. Boss Encounter (Multi-phase)
+powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern BossEncounter -ModPrefix MYMOD -Name OverlordCarrier -Faction GAALSIEN
 ```
 
 ---

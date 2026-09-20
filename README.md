@@ -86,19 +86,19 @@ se-dev-mes/
 ### 1. Antigravity / Gemini CLI
 Clone directly into your global skills directory:
 ```bash
-git clone https://github.com/<your-username>/se-dev-mes.git ~/.gemini/config/skills/se-dev-mes
+git clone https://github.com/GV-Server-Mods/se-dev-mes.git ~/.gemini/config/skills/se-dev-mes
 ```
 
 ### 2. Claude Code
 Clone directly into your Claude skills directory:
 ```bash
-git clone https://github.com/<your-username>/se-dev-mes.git ~/.claude/skills/se-dev-mes
+git clone https://github.com/GV-Server-Mods/se-dev-mes.git ~/.claude/skills/se-dev-mes
 ```
 
 ### 3. Per-Project / Workspace (Cursor, Cline, VS Code)
 Clone into your workspace's `.skills/` directory:
 ```bash
-git clone https://github.com/<your-username>/se-dev-mes.git .skills/se-dev-mes
+git clone https://github.com/GV-Server-Mods/se-dev-mes.git .skills/se-dev-mes
 ```
 
 ---

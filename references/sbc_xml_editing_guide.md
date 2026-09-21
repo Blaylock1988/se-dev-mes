@@ -69,6 +69,7 @@ Keen's XML deserializer reads `<Description>` elements using `XmlReader.ReadElem
 - **Required Encoding**: **UTF-8** (without BOM or with standard UTF-8 BOM).
 - **Avoid UTF-16**: Never save `.sbc` files in UTF-16 (Unicode in Windows Notepad), as Keen's deserializer will fail to read the root element.
 - When generating or saving files via scripts, always specify `[System.Text.Encoding]::UTF8`.
+- **Enforced by `audit_sbc.ps1` (Check 0)**: flags UTF-16 LE/BE BOMs and invalid UTF-8 byte sequences as critical errors. UTF-8 with or without BOM is accepted.
 
 ---
 

@@ -16,12 +16,38 @@ param(
 )
 
 $files = Get-ChildItem -Path $Path -Filter *.sbc -Recurse | Where-Object { 
-    $_.FullName -notmatch '\\(Prefabs|StorePrefabs)(\\|$)' 
+    $_.FullName -notmatch '\\(bin|obj|Prefabs|StorePrefabs)(\\|$)' 
 }
 
 $errorsFound = 0
 
 foreach ($file in $files) {
+    $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+
+    # Check 0: Encoding & BOM integrity (Keen deserializer requires UTF-8)
+    $isUtf16 = $false
+    if ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) {
+        $isUtf16 = $true
+    } elseif ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF) {
+        $isUtf16 = $true
+    }
+    if ($isUtf16) {
+        Write-Host "[ERROR] $($file.FullName) - UTF-16 encoding detected! Keen's deserializer will fail to read the root element. Re-save as UTF-8 (see Format-MesSbc.ps1)." -ForegroundColor Red
+        $errorsFound++
+        continue
+    }
+    # Detect invalid UTF-8 sequences (file saved in a legacy codepage without BOM)
+    if ($bytes.Length -gt 0) {
+        try {
+            $strictUtf8 = [System.Text.UTF8Encoding]::new($false, $true) # throwOnInvalidBytes
+            [void]$strictUtf8.GetString($bytes)
+        } catch {
+            Write-Host "[ERROR] $($file.FullName) - Invalid UTF-8 byte sequence detected (file likely saved in a legacy codepage). Re-save as UTF-8." -ForegroundColor Red
+            $errorsFound++
+            continue
+        }
+    }
+
     $raw = [System.IO.File]::ReadAllText($file.FullName)
     $lines = $raw -split "`r?`n"
     

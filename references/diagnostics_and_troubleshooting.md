@@ -267,16 +267,38 @@ When troubleshooting encounter loading or execution failures, search `SpaceEngin
   ```
 
 ### 10. NPC Reverses Into Space at Max Thrust / Endless Flip-and-Burn Slingshot
-- **Cause**: The grid lacks thrusters in all 6 cardinal directions (particularly missing backward/reverse braking thrusters).
+- **Cause**: The grid lacks thrusters in all 6 cardinal directions (particularly missing backward/reverse braking thrusters), or exceeds speed tolerance triggering the unsigned scalar reverse trap (`ThrustSystem.cs:250`).
 - **Result**:
   1. In `ThrustSystem.cs`, exceeding `MaxSpeed + MaxSpeedTolerance` commands 100% reverse thrust (`SetZ(true, true, 1)`) and drops forward thrusters to `0.0001f`. Without reverse thrusters, braking force is 0.
   2. `CalculateStoppingDistance()` computes 0 stopping distance, causing the grid to blow past waypoints at max speed.
   3. Once past the waypoint, `RotationSystem.cs` rotates the craft 180° to face the waypoint behind it.
   4. Moving backwards relative to its heading at max speed, `velocityToTargetAngle` exceeds `MaxVelocityAngleForSpeedControl`, triggering 100% forward thrust override into deep space.
+  5. On rovers, reverse velocity exceeding `MaxSpeed` locks reverse thrust at 100% permanently because `velocity.Length()` is an unsigned scalar.
 - **Fix**:
   1. Add at least one working thruster in all six cardinal directions.
   2. For atmospheric aircraft with forward-only thrust, switch behavior subclass to `FighterPlane` (which uses velocity-aligned climbing breakaway without braking).
-  3. For thrust-driven rovers, ensure Down thrusters (artificial downforce), Up thrusters (altitude clamping), and Backward thrusters (waypoint deceleration) are installed.
+  3. For thrust-driven rovers, see [behaviors_and_autopilot.md §6.C](file:///c:/Users/blayl/source/repos/se-dev-mes/references/behaviors_and_autopilot.md#c-thrust-driven-rovers--ground-vehicles-best-practices--pitfalls-hard--soft) for the complete rover setup (`[UseSurfaceHoverThrustMode:true]`, `[FlyLevelWithGravity:false]`, and matching `[IdealPlanetAltitude]` to Remote Control height).
+
+### 11. Rover NPC Stalls on Hills, Lifts Wheels, or Backflips Into Sky
+- **Cause**:
+  1. **Hill Stalling**: `HoverUpAngle` defaults to 10°. Inclines or ramps steeper than 10° trigger `_thrustToApply.SetZ(false, false, 0)`, completely cutting forward thrust.
+  2. **Wheel Lifting**: `[FlyLevelWithGravity:true]` forces chassis perpendicular to planetary gravity rather than terrain slope, lifting downhill/uphill wheels off the ground.
+  3. **Backflipping on Turns**: Waypoints generated behind the rover create a 90°/90° yaw symmetry deadzone while pitch saturates to 100% override (`Math.PI * 2`).
+  4. **Sky Evasion**: Voxel collision raycasts detect ground in all directions except UP, commanding climb evasion into space.
+- **Fix**: Apply the golden rover autopilot profile from [behaviors_and_autopilot.md §6.C](file:///c:/Users/blayl/source/repos/se-dev-mes/references/behaviors_and_autopilot.md#c-thrust-driven-rovers--ground-vehicles-best-practices--pitfalls-hard--soft):
+  ```xml
+  [UseSurfaceHoverThrustMode:true]
+  [FlyLevelWithGravity:false]
+  [IdealPlanetAltitude:<rc_block_height>]
+  [HoverPathStepDistance:50]
+  [WaypointTolerance:15]
+  [MaxVerticalSpeed:5]
+  [RotationMultiplierPitch:0.1]
+  [RotationMultiplierYaw:1.5]
+  [RotationMultiplierRoll:1.0]
+  [UseVelocityCollisionEvasion:false]
+  ```
+  Also ensure prefab wheel suspension friction is `<= 12%` so gyro yaw torque can pivot the vehicle smoothly.
 
 
 ---

@@ -211,25 +211,97 @@ Unless using a subclass specifically built for single-axis thrust (`FighterPlane
 
 ---
 
-### C. Thrust-Driven Rovers & Ground Vehicles (`FakeRoverPathing`) [HARD & SOFT]
-RivalAI does not drive wheel suspension motors via the autopilot; ground AI navigation (`FakeRoverPathing`) relies on thrusters for locomotion. Ground vehicles experience severe instability without proper multi-axis thrusters:
+### C. Thrust-Driven Rovers & Ground Vehicles (Best Practices & Pitfalls) [HARD & SOFT]
 
-1. **Down Thrusters (Artificial Downforce) [SOFT]**:
-   - Terrain bumps and high speeds cause rovers to launch into the air.
-   - Downward thrusters provide continuous artificial downforce, planting suspension wheels firmly against terrain, preventing loss of steering friction and airborne tumbling.
-2. **Up Thrusters & Altitude Clamping [HARD]**:
-   - `CalculateHoverThrust()` actively monitors `altitudeDist` relative to waypoints.
-   - When cresting hills or descending slopes, MES attempts vertical corrections via `_thrustToApply.SetY(...)`.
-   - Without vertical thrusters, vertical velocity cannot be regulated, causing dampeners on other thrusters to drop to `0.0001f` and inducing runaway oscillation.
-3. **Hover Angle Cutoff Trap [HARD]**:
-   - In `CalculateHoverThrust()`, if rover tilt exceeds `HoverUpAngle` (`upAngle > HoverUpAngle`) when climbing steep hills or rolling on rocks:
+RivalAI does not drive `IMyMotorSuspension` wheel motors via the autopilot. Ground vehicles (`FakeRoverPathing` or standard behaviors) rely entirely on **thrusters for locomotion** and **gyroscopes for steering**. Ground rovers experience severe instability, stratospheric launches, and motion deadlocks without proper thruster architecture and specialized autopilot tuning.
+
+#### 1. Locomotion & Thruster Architecture [HARD & SOFT]
+- **No Native Wheel Propulsion [HARD]**: RivalAI has zero code driving wheel suspension propulsion or steering. All wheeled rovers require internal/hidden thrusters in all 6 directions and gyroscopes.
+- **Up Thrusters (pointing DOWN) [HARD]**: When a rover is below its waypoint (`altitudeDist < 0`), MES applies vertical correction via `_thrustToApply.SetY(...)`. Without Up thrusters, `SetY` does nothing, and the rover pitches its nose up into the sky and fires main forward thrusters to climb, launching it into the air like a rocket. Up thrusters satisfy vertical delta adjustments without pitch escalation.
+- **Down Thrusters (pointing UP) [HARD & SOFT]**: When cresting dunes or bouncing over rocks, upward velocity (`upVelocityAmt > 0`) requires downward braking. In `CalculateHoverThrust()`, `CalculateStoppingDistance()` computes downward braking using down thrusters. Without Down thrusters, downward stopping distance is `0`, and the autopilot cannot arrest upward bouncing. Down thrusters provide active bounce braking and continuous artificial downforce, keeping wheels planted for steering.
+- **Forward & Backward Thrusters [HARD]**: Forward propulsion and waypoint deceleration. Reverse thrusters are mandatory; without them, `CalculateStoppingDistance()` is `0`, causing the rover to blow through waypoints at full speed.
+
+#### 2. The Four Ground AI Failure Modes & Deadlocks [HARD]
+1. **The Scalar Reverse Runaway Trap (`ThrustSystem.cs:250`)**:
+   - Going downhill or hitting a terrain bump causes grid speed to exceed `MaxSpeed + MaxSpeedTolerance`.
+   - In `CalculateDirectForwardThrust()`, MES commands `_thrustToApply.SetZ(true, true, 1)` (100% reverse override) and forces forward thrusters to `0.0001f` (disabling vanilla inertia dampeners).
+   - Once the rover stops forward motion and rolls backward, MES checks `velocityAmount = velocity.Length()`.
+   - Because `.Length()` is an **unsigned scalar**, reversing at 105 m/s still evaluates to `velocityAmount > MaxSpeed`. MES keeps 100% reverse thrust pinned permanently, accelerating the rover backwards into deep space.
+2. **The Voxel Collision Sky Evasion Loop (`CollisionSystem.cs:1344`)**:
+   - MES casts raycasts in cardinal directions. On a planet surface, forward and down rays immediately hit terrain voxels within meters.
+   - In `CalculateEvadeCoords()`, MES iterates through available directions to find an unobstructed vector. The only clear direction with no voxels is **UP** (`UpResult`).
+   - The autopilot generates evasion waypoints high in the sky, commanding climb thrust and pitch-up evasion constantly.
+   - **Fix**: Set `[UseVelocityCollisionEvasion:false]` on all ground rovers.
+3. **The 180° Backflip Bug (`RotationSystem.cs:103-120 & 179-200`)**:
+   - When a waypoint or offset is generated behind the rover (~180°):
+     - **Yaw Symmetry Deadzone**: `angleLeftToTarget` ≈ 90° and `angleRightToTarget` ≈ 90°. `YawTargetAngleResult` difference between left and right is nearly `0`, leaving yaw with almost zero directional authority.
+     - **Pitch Saturation**: Any slight elevation delta or suspension tilt causes `CalculateGyroAxisRadians()` to evaluate `totalAngle = 180 > 0`, forcing `angleDifference = 90°` (`>= RotationSlowdownAngle`). This returns **100% maximum gyro pitch override** (`Math.PI * 2`).
+     - Pitch is commanded to maximum torque while yaw is paralyzed. The rover attempts a **backflip into the sky** to turn around instead of yawing on the ground.
+   - **Fix**: Set `[RotationMultiplierPitch:0.1]` and `[RotationMultiplierYaw:1.5]`. Keep `[RotationMultiplierRoll:1.0]` to preserve gyro authority for self-righting and defending against player ramming/flipping attacks.
+4. **The 10° Hill Stall Trap (`ThrustSystem.cs:273, 409-416`)**:
+   - In `CalculateHoverThrust()`, if rover chassis tilt exceeds `HoverUpAngle` (`upAngle > HoverUpAngle`):
      ```csharp
      _thrustToApply.SetY(false, false, 0, _orientation);
      _thrustToApply.SetZ(false, false, 0, _orientation); // Shuts off ALL forward thrust!
      ```
-   - Forward propulsion completely cuts out until the rover levels with gravity, causing rovers without adequate vertical or leveling thrusters to stall on hills.
-4. **Reverse Thrusters for Waypoint Turns [HARD]**:
-   - Without reverse thrusters, `CalculateStoppingDistance()` returns `0`. The rover cannot decelerate before sharp waypoint turns, resulting in high-speed barrier impacts or rollovers.
+   - `HoverUpAngle` defaults to **`10` degrees** (`AutoPilotProfile.cs:320`). Standard SE ramps are 18.4° (3x1), 26.5° (2x1), and 45° (1x1).
+   - Driving onto even shallow slopes or ramps causes `upAngle > 10`, immediately cutting forward thrust to 0% and stalling the rover permanently in `"Not Level With Gravity Direction"`.
+
+#### 3. Slope Dynamics & The "3/4 Wheels in the Air" Conflict [HARD & SOFT]
+- **The Gravity vs Terrain Normal Conflict**: `[FlyLevelWithGravity:true]` forces the rover chassis to remain perpendicular to the planet's gravity vector (`_upDirection`). On any hill or slope, the terrain normal is tilted relative to gravity. Forcing the chassis level lifts the uphill or downhill wheels into the air (balancing on 1 or 2 wheels).
+- **The Solution**: Set `[FlyLevelWithGravity:false]`. This allows the suspension to sit flush on slopes naturally.
+- **Remote Control Height Anchoring**: When `FlyLevelWithGravity:false`, the gyros aim the nose directly at the 3D position of the waypoint. In `CalculateHoverPath()`, the waypoint is placed at `_upDirection * IdealPlanetAltitude + stepAheadSurface`. If `IdealPlanetAltitude` is 10m or 25m, the waypoint floats in the air, causing the rover to drive with its front wheels pitched upward.
+  - **Rule**: Set `[IdealPlanetAltitude]` to the **exact physical height of the Remote Control block above the ground** (typically `1.5` to `2.5` meters). This places the waypoint at bumper level, keeping pitch at ~0° parallel to terrain.
+
+#### 4. Step Distance vs Waypoint Tolerance [CRITICAL]
+- In `CalculateHoverPath()`, step-ahead waypoints are projected `HoverPathStepDistance` meters ahead.
+- In `ThrustSystem.cs:442`, when `forwardDistance <= WaypointTolerance`, MES flags `"Within Waypoint Tolerance Distance"` and sets forward thrust to `0` (`SetZ(false, false, 0)`).
+- **Rule**: `HoverPathStepDistance` **MUST ALWAYS BE GREATER** than `WaypointTolerance`!
+  - If `HoverPathStepDistance <= WaypointTolerance` (e.g. Step 20m, Tolerance 25m), newly generated waypoints spawn inside the arrival radius, instantly zeroing forward thrust and deadlocking the rover.
+  - Recommended: `[HoverPathStepDistance:50]` (use `< 100` for rough terrain) and `[WaypointTolerance:15]`.
+
+#### 5. Prefab Wheel Suspension Tuning [SOFT]
+- **Friction <= 12%**: Because RivalAI turns grids via gyroscopes rather than wheel steering angles, high tire friction (default 50%–100%) resists lateral skid. Set suspension friction very low (`<= 12%`) on the prefab to allow gyro yaw torque to pivot the vehicle smoothly without fighting tire grip or causing rollovers.
+
+#### 6. Golden Rover Autopilot Configuration Template [REFERENCE]
+
+```xml
+<Description>
+  [RivalAI Autopilot]
+
+  <!-- Surface Navigation (Bypasses aircraft climb logic; uses directional velocity dot product) -->
+  [UseSurfaceHoverThrustMode:true]
+
+  <!-- Slope Alignment & Pitch Anchoring (Do NOT use FlyLevelWithGravity with UseSurfaceHoverThrustMode) -->
+  [FlyLevelWithGravity:false]
+  <!-- Set to exact physical height of Remote Control block above terrain (e.g., 1.5 to 2.5) -->
+  [IdealPlanetAltitude:2]
+  [MinimumPlanetAltitude:1]
+  [AltitudeTolerance:1]
+
+  <!-- Waypoint Projection (CRITICAL: StepDistance MUST be greater than WaypointTolerance) -->
+  <!-- Use StepDistance < 100 for rougher terrains -->
+  [HoverPathStepDistance:50]
+  [WaypointTolerance:15]
+
+  <!-- Vertical Stabilization & Anti-Rocket Clamping -->
+  <!-- Caps climb rate when bouncing off dunes (default is -1 / unlimited) -->
+  [MaxVerticalSpeed:5]
+
+  <!-- Gyro Authority (Kills 180-deg backflips, prioritizes yaw, preserves roll self-righting) -->
+  [RotationMultiplierPitch:0.1]
+  [RotationMultiplierYaw:1.5]
+  [RotationMultiplierRoll:1.0]
+
+  <!-- Collision Evasion (Disable to stop rover evading ground voxels upward into space) -->
+  [UseVelocityCollisionEvasion:false]
+
+  <!-- Speed & Braking Tolerances (Prevents hill bumps from tripping 100% reverse brake trap) -->
+  [MaxSpeedTolerance:5]
+  [IdealMinSpeed:8]
+  [IdealMaxSpeed:25]
+</Description>
+```
 
 ---
 

@@ -62,6 +62,7 @@ To optimize AI agent tokens and preserve context window space, detailed content 
 | [profiles_and_tags.md](references/profiles_and_tags.md) | Catalog of 30+ profile types, Registration Phases 1–5, and tag types. |
 | [spawning_and_conditions.md](references/spawning_and_conditions.md) | Spawners, environment gates, threat scoring, altitude formulas, and event spawners. |
 | [behaviors_and_autopilot.md](references/behaviors_and_autopilot.md) | 11 Behavior subclasses, Role vs. CombatType state machines, and autopilot profiles. |
+| [aircraft_behaviors_and_tuning.md](references/aircraft_behaviors_and_tuning.md) | Attack-run tuning, profile-swap triggers, fixed-gun gates, WeaponCore shoot mode (why MES fixed guns never fire), hover fighters, tuning method. |
 | [manipulation_and_dereliction.md](references/manipulation_and_dereliction.md) | Block replacements, weapon randomizer (`<Public>true</Public>`), dereliction, AiEnabled bots, and ContainerTypes loot tables. |
 | [events_and_zones.md](references/events_and_zones.md) | MES Events vs RivalAI Triggers, boolean master gates, zero-stripping bug, dynamic zones. |
 | [economy_and_stores.md](references/economy_and_stores.md) | 3-part store grid sales chain (`Builder` subtype rule), 124m clearance, dual icon/tooltip declarations, automated store refresh. |

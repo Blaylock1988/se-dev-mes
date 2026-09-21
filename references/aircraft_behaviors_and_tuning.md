@@ -1,0 +1,109 @@
+# Aircraft Attack Runs, Triggers, Weapons & Tuning
+
+Companion to `behaviors_and_autopilot.md` for anything that flies (propeller aircraft and hover fighters). That file already covers the subclass list, the
+`FighterPlane` breakaway (section 6B), the thruster-direction requirements (6A) and the `LevelWithGravity` pitch lockout (section 3A and 6D). This file adds what
+is not there yet: how the attack-run cycle is tuned, which triggers swap profiles, the gates and ammo rules for fixed guns, **why WeaponCore fixed guns never fire from MES**, and a tuning method.
+
+**Verified against**: MES 2.74.00 and CoreSystems (WeaponCore) 3.0 source, plus in-game testing of forward-thrust propeller aircraft. Hover/omni-thrust statements are read from source and
+were **not** flight-tested unless stated. **[HARD]** = read in source (file:line given) or seen in a real log/prefab. **[SOFT]** = inferred or measured in play.
+
+---
+
+## 1. The attack-run cycle (`Strike` / `FighterPlane`) **[HARD]**
+
+States: `WaitingForTarget` -> `ApproachTarget` -> `EngageTarget` -> back to `ApproachTarget` after the breakaway. `FighterPlane` is `Strike` line for line except the breakaway offset keeps the
+plane's velocity direction (`FighterPlane.cs:256`); both read their distances from the **autopilot profile** whenever one is attached (`Strike.cs:22-25`), so the behavior-level
+`[StrikeBegin...]` / `[FighterPlaneBegin...]` tags do nothing in practice. `Fighter` is the reverse: `[FighterEngageDistancePlanet:]` wins when set above 0 (`Fighter.cs:20`).
+
+1. **Approach.** The autopilot flies to an **offset waypoint** around the target: `OffsetPlanetMinDistFromTarget` / `OffsetPlanetMaxDistFromTarget` away and
+   `OffsetPlanetMinTargetAltitude` / `MaxTargetAltitude` above the terrain at that point (`OffsetSpace*` in space). Recalculated every `OffsetRecalculationTime` s (default 30).
+2. **Run start.** The run begins when the plane is within `AttackRunDistancePlanet` of the **offset waypoint** (not of the target) **and** the target is farther than
+   `AttackRunBreakawayDistance`. With `AttackRunOverrideWithDistanceAndTimer:true` it is also forced when the plane stays within `AttackRunOverrideDistance` of the offset waypoint for
+   `AttackRunOverrideTimerTrigger` s (stops a plane circling the offset forever). `AttackRunDistancePlanet` should exceed the turn radius (`speed / rotation rate`) or the plane can orbit the offset without
+   getting inside. **[SOFT]**
+3. **Run.** The waypoint becomes the target. `AttackRunUseSafePlanetPathing` keeps the terrain climb active; `AttackRunUseCollisionEvasionPlanet` (default false) leaves collision evasion off because the target itself would count as the obstacle.
+4. **Run end.** The run ends when the distance to the target is `<= AttackRunBreakawayDistance` (default 450) or on `BehaviorActionA`. Then the next offset is picked.
+   **`[AttackRunMaxTimeTrigger:]` does nothing.** The engage code checks `Data.AttackRunMaxTimeTrigger > 0` (`Strike.cs:239`, `FighterPlane.cs:239`) but `AutoPilotProfile.cs` has no parser for the tag, so it is always -1 (off).
+5. **Distances that must agree.**
+   - Offset distance = turn-around space. A longer offset gives a longer straight approach to line up, and a shallower dive (`atan(offset altitude / offset distance)`), which matters for targets on the ground.
+   - The plane has to stay inside the target's acquisition range: compare the offset distance (plus turn-around overshoot) with the targeting profile's `MaxDistance` / `NonBroadcastVisualRange` and any `TargetFar` trigger distance (section 2).
+   - The breakaway distance must leave room to pull out. Pull-out radius is about `speed / rotation rate`; a dive at angle `a` loses about `R * (1 - cos a)` plus gyro spin-up. **[SOFT]**
+   - The gun firing window is roughly `MaxStaticWeaponRange - AttackRunBreakawayDistance` (section 3).
+
+**Speed during a run (open question, [SOFT]).** With `SlowDownOnWaypointApproach:true`, `CalculateStoppingDistance(velocity, _forwardDir, Direction.Forward)` (`ThrustSystem.cs:490-510`) sums the thrusters with
+`ActiveDirection == Forward` (`ThrusterProfile.GetEffectiveThrust`) - the same thrusters `SetZ(invert:false)` drives for forward thrust. On an aircraft with only forward propellers that gives a non-zero estimate, thrust is cut
+inside it and the plane **coasts** (it never brakes down to `IdealMinSpeed`, and in a dive gravity adds speed). Section 6A item 2 of `behaviors_and_autopilot.md` describes the no-reverse-thruster case as a stopping distance of 0.
+Flight tests on forward-propeller aircraft matched the coasting reading, but which case applies depends on how the thrusters are classified - check with `/MES.BehaviorDebug.Thrust.true`. Where you want thrust held through a run, set `SlowDownOnWaypointApproach:false`.
+
+---
+
+## 2. Switching subclasses and profiles with triggers **[HARD]**
+
+A common layout: a `Patrol` grid swaps to a combat subclass when a target appears, and back again.
+
+| Trigger `[Type:]` | Fires when | Notes |
+| :--- | :--- | :--- |
+| `TargetNear` | a target exists and is closer than `[TargetDistance:]`; **also fires with no target if `AllowTargetFarWithoutTarget` is true** (`TriggerChecks.cs:44`) | "Start combat". |
+| `TargetFar` | a target exists and is **farther** than `[TargetDistance:]` (`TriggerChecks.cs:52`) | **Needs a live target**; it can never fire once the target is dead or lost. |
+| `LostTarget` | the targeting system flagged the target lost (`TriggerChecks.cs:135`) | Pair with `TargetFar` so a plane returns to patrol in both cases. |
+| `BehaviorTriggerA` / `B` | raised by the subclass: Patrol arrive / leave waypoint; Fighter engage / disengage; Strike & FighterPlane breakaway (A) / run start (B) | Use to swap autopilot profiles between phases. |
+
+- **`[AutopilotProfile:]` takes a slot, not a profile name.** In an action it is an `AutoPilotDataMode` enum: `Primary`, `Secondary`, `Tertiary` (`ActionReferenceProfile.cs:264`, `AutoPilotSystem.cs:25`).
+  The profiles behind the slots are named on the behavior profile: `[AutopilotData:<Id>]`, `[SecondaryAutopilotData:<Id>]`, `[TertiaryAutopilotData:<Id>]` (`AutoPilotSystem.cs:401/421/441`).
+- **Every profile swap re-activates the autopilot from the new profile's tags** (`ActionSystem.cs:1790` -> `SetAutoPilotDataMode`, `AutoPilotSystem.cs:2370-2376`), copying `FlyLevelWithGravity` **and** `LevelWithGravityWhenIdle` into the state.
+  This is a second way the pitch lockout in section 6D of `behaviors_and_autopilot.md` gets switched on, in addition to the engage activation that passes no `CheckEnum` arguments (`FighterPlane.cs:192`): with `LevelWithGravityWhenIdle:true` the mode is on after every swap.
+  Keep both tags `false` in every profile of a wing-lift aircraft.
+- **Hysteresis**: make the "back to patrol" distance clearly larger than the "start combat" distance so a plane at the boundary does not flip.
+- `[EnableTriggerNames:]` does **not** reset a trigger's cooldown or count; only `[ResetTriggerCooldownNames:]` / `ToggledProfileResetsCooldown` do (`TriggerSystem.cs`). A `StartsReady:true` trigger skips its first cooldown (`TriggerProfile.cs:397`).
+
+---
+
+## 3. Weapons on aircraft
+
+### A. MES's gates for fixed (static) guns **[HARD]**
+`[RivalAI Weapons]` (`WeaponSystemReference.cs`). A fixed gun fires only when **all** hold (`BaseWeapon.cs`, `StaticDistanceAndAngleCheck`):
+
+- the target (or waypoint) is within `MaxStaticWeaponRange`,
+- the angle between the gun's forward axis and the target is `<= WeaponMaxAngleFromTarget` degrees,
+- the point the gun's line reaches at target range is within `WeaponMaxBaseDistanceTarget` meters of the target (100 m at 1000 m range is about 5.7 deg, so at long range this is the tighter gate),
+- no terrain or friendly grid is in the way.
+
+`UseAmmoReplenish` (default true) gives an empty NPC gun `AmmoReplenishClipAmount` (default 15) magazines, up to `MaxAmmoReplenishments` times (**default 10**; `WeaponSystemReference.cs:61-63`, `CoreWeapon.cs:243`).
+Leaving `MaxAmmoReplenishments` out does **not** make it unlimited, and MES has no infinite-ammo option.
+
+### B. WeaponCore fixed guns must not be in "Auto (AI Controlled)" **[HARD]**
+The usual reason "MES aims at the target but the WeaponCore guns never fire".
+
+- MES fires a WC fixed gun with `ToggleWeaponFire(block, true, false, id)` (`CoreWeapon.cs:443`), which becomes `RequestShootSync(0, On, Signals.On)` (CoreSystems `ApiBackend.cs:1151`).
+- WeaponCore only honors an "On" trigger when the weapon's shoot mode is **not** `AiShoot` (or the signal is `Manual`): `onConfirmed = Trigger == On && (ShootMode != AiShoot || Signal == Manual)` (`SessionUpdate.cs:576`).
+- `AiShoot` is the default (`ProtoWeapon.cs:616`), shown as "Auto (AI Controlled)". A fixed gun (`TrackTargets:false`, `TurretAttached:false`) cannot fire itself in that mode, so MES's command is dropped.
+- Setting the block to **Mouse Control** fixes it (confirmed in game). `KeyToggle` / `KeyFire` also pass the code check but were not tested. **[SOFT]**
+- MES has no code to set the mode and the WC API has no setter, so it has to be **saved in the prefab/blueprint**. WeaponCore stores it as protobuf in the block's `ModStorageComponent` (key `75bbb4f5-4fb9-4230-beef-bb79c9811501`).
+  `scripts/wc_shootmode.py` lists and sets it in `.sbc` prefabs, and its `classify` command tells fixed guns from turrets (turrets track and fire themselves; leave them on Auto).
+- MES ignores WeaponCore's `AimLeadingPrediction`; it leads targets itself with the autopilot tags `UseProjectileLeadPrediction` (default true) / `UseCollisionLeadPrediction` (`AutoPilotSystem.cs:1275-1290`).
+
+---
+
+## 4. Hover / omni-thrust fighters **[SOFT]** (source-read, not flight-tested)
+
+- `Fighter` approaches with `RotateToWaypoint | ThrustForward | PlanetaryPathing | WaypointFromTarget`, then **engages with `RotateToWaypoint | Strafe | WaypointFromTarget` and no `ThrustForward`**: it strafes with lateral/up/down thrusters and needs `[AllowStrafing:true]` (`Fighter.cs`). It needs thrusters in all six directions (see 6A).
+- For hover craft, `LevelWithGravity` is the intended mode rather than a bug: in gravity with `ThrustForward` it swaps `CalculateDirectForwardThrust` for `CalculateHoverThrust` (`ThrustSystem.cs:70`), which holds altitude against the waypoint
+  (`AltitudeTolerance`, `MaxVerticalSpeed`, `HoverUpAngle`). The price is the pitch lockout: the nose stays level, so a leveled hover craft will not nose-dive at targets. Never combine it with `UseSurfaceHoverThrustMode`.
+- If a hover fighter must aim its nose up or down at targets, run it without `LevelWithGravity` and give it enough vertical thrust to hold altitude on its own.
+
+---
+
+## 5. Tuning method (what worked)
+
+1. **Change one thing at a time and test it.** A rewrite that changed six numbers at once made every plane crash and identified nothing. Keep numbered copies of the behavior files and install one at a time.
+2. **Measure the airframe before choosing numbers.** `scripts/PB_TurnTest.cs` is a Programmable Block script: on the NPC variant in steady flight it drives the gyros at a set yaw or pitch rate and prints how far the flight **path** turned (not just the nose), speed and altitude change at 90 and 180 deg.
+   Typical findings: wings add little yaw authority, high nose rates bleed speed, path radius grows with speed squared. **[SOFT]**
+3. **Read what MES actually loaded**: `/MES.Info.GetGridBehavior` (`/MES.IGGB`) prints the live autopilot flags, including `LevelWithGravity`.
+4. **Find silent no-ops**: run `scripts/audit_unknown_tags.py` over your behavior folder; MES never reads a tag its parser does not know (a typo, or a tag from another profile type).
+
+## 6. Debugging aircraft (commands are in `diagnostics_and_troubleshooting.md`, section B)
+
+- **Guns silent while the plane lines up**: `/MES.BehaviorDebug.Weapon.true`. Each gun logs `NoAmmo`, `StaticWeaponNotAligned` (the flying is the problem, see 3A) or `ReadyToFire` + "Start Fire" (MES is firing; if nothing comes out, check 3B).
+- **Yaws at the target but never pitches**: `/MES.IGGB` and look for `LevelWithGravity`; see section 2 above and 6D.
+- **Speed is wrong**: `/MES.BehaviorDebug.Thrust.true` shows the thrust branch ("Brake To Desired Speed", "Drifting At Desired Speed", "Thrust Angle Not Matched").
+- **A spawn never produces the aircraft**: `/MES.SpawnDebug.SpawnGroup.true` prints why each group was rejected (for example "Could Not Get Valid NPC Faction" when the group's `FactionOverride` does not exist in the world). Without it the log only says "Eligible SpawnGroup Count 0".

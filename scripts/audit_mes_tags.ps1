@@ -36,7 +36,7 @@ $knownFactions = [System.Collections.Generic.HashSet[string]]::new([System.Strin
 # Primary known factions and reserved keywords (pass silently)
 $primaryFactions = @(
     'SPRT', 'SPID',
-    'Nobody', 'UseBaseGameFactionTags', '{Faction}', '{Attacker}'
+    'Nobody', 'UseBaseGameFactionTags'
 )
 foreach ($pf in $primaryFactions) { [void]$knownFactions.Add($pf) }
 
@@ -127,7 +127,11 @@ foreach ($file in $files) {
             $propName = $matches[1]
             $fTag = $matches[2].Trim()
             if ($fTag.Length -gt 0) {
-                if ($knownFactions.Contains($fTag)) {
+                if ($fTag -match '^\{.*\}$') {
+                    Write-Host "[ERROR] $($file.Name):$lineNum - Dynamic token '$fTag' in [${propName}:$fTag] cannot be resolved! Faction tags in spawn conditions/groups are evaluated pre-spawn before NpcData exists (IdsReplacer does not run here)." -ForegroundColor Red
+                    $issuesFound++
+                }
+                elseif ($knownFactions.Contains($fTag)) {
                     # Known primary or declared faction - passes silently
                 }
                 elseif ($obscureVanillaFactions.Contains($fTag)) {
@@ -145,7 +149,11 @@ foreach ($file in $files) {
             foreach ($item in ($rawList -split ',')) {
                 $fTag = $item.Trim()
                 if ($fTag.Length -gt 0) {
-                    if ($knownFactions.Contains($fTag)) {
+                    if ($fTag -match '^\{.*\}$') {
+                        Write-Host "[ERROR] $($file.Name):$lineNum - Dynamic token '$fTag' in [${propName}:$rawList] cannot be resolved! Faction tags in spawn conditions/groups are evaluated pre-spawn before NpcData exists (IdsReplacer does not run here)." -ForegroundColor Red
+                        $issuesFound++
+                    }
+                    elseif ($knownFactions.Contains($fTag)) {
                         # Known primary or declared faction - passes silently
                     }
                     elseif ($obscureVanillaFactions.Contains($fTag)) {

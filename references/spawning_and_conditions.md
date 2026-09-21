@@ -211,7 +211,12 @@ if (validFactionsList.Count == 0 && collection.OwnerOverride < 0) {
    - In Space Engineers, player-created factions in the GUI are strictly **3 characters**.
    - NPC factions defined in `Factions*.sbc` should use **4 or more characters** (e.g. `SPRT`, `SPID`, `GAALSIEN`) to prevent naming collisions with player-created factions.
 2. **Tiered Validation**:
-   - **Tier 1 (Primary & Declared)**: `SPRT`, `SPID`, reserved tokens (`Nobody`, `UseBaseGameFactionTags`, `{Faction}`, `{Attacker}`), plus any faction declared in local `Factions*.sbc`. Pass silently.
+   - **Tier 1 (Primary & Declared)**: `SPRT`, `SPID`, reserved keywords (`Nobody`, `UseBaseGameFactionTags`), plus any faction declared in local `Factions*.sbc`. Pass silently.
    - **Tier 2 (Obscure Vanilla / Economy / Campaign)**: `CIVL`, `TRAD`, `ROBO`, `FSD`, `STEJ`, `KRI`, `INDEP`, `SHIV`, `GTI`, `ROS`, `AMPH`, `BLDR`, `MINR`, `MILT`, `PIR8`, `RED`, `BLU`. Flagged as `[INFO]` (soft notice) since modders rarely target Keen economy/campaign factions and they require specific world settings to exist.
    - **Tier 3 (Unrecognized / Typo)**: Any undefined tag causes silent 0% spawn drops and is flagged as `[WARN]`.
+3. **IdsReplacer Incompatibility with Pre-Spawn Faction Tags**:
+   - `IdsReplacer` runs only at runtime on active grids with `NpcData` (e.g., chat, GPS, LCDs, and `PlayerConditionProfile.CheckReputationwithFaction`).
+   - `SpawnConditions.cs` (`ValidNpcFactions`) and `EventActionExecution.cs` (`[SpawnFactionTags]`) evaluate pre-spawn before `NpcData` exists.
+   - Using dynamic tokens like `{Faction}`, `{Attacker}`, or `{SandboxVar}` inside `[FactionOwner:]`, `[FactionOverride:]`, `[SpawnFactionTags:]`, or `[CheckReputationAgainstOtherNPCFaction:]` causes a literal string lookup in session factions that fails, permanently locking the encounter to 0% spawn rate. Flagged as `[ERROR]`.
+
 

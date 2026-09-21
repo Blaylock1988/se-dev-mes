@@ -235,5 +235,7 @@ Modular Encounters Systems (MES) and RivalAI ship with default, built-in profile
 1. **[HARD] MES Events Pass `npcData = null`**: `{Faction}`, `{SpawnGroupName}`, and `{<CustomStringKey>}` **never resolve in MES Events**; only `{<SandboxVarKey>}` and `{PlayerName}` (in chat) function.
 2. **[HARD] Profile SubtypeIds Resolve Statically**: Putting tokens in action profile names (e.g. `[Actions:MyAction-{Faction}]`) **fails to find the profile**. Token replacement only runs on dynamic runtime parameters (Command codes, Zone names, GPS names, Chat text, LCD text, Sandbox variables).
 3. **[HARD] No Rival Faction Token**: `{Faction}` always resolves to the NPC's *own* faction. There is no `{RivalFaction}` token.
+4. **[HARD] Tokens in Pre-Spawn Faction Tags Never Resolve**: `[FactionOwner:]`, `[FactionOverride:]`, and `[SpawnFactionTags:]` evaluate before any grid exists (`NpcData == null`). `IdsReplacer` does not run; tokens cause a literal string lookup in session factions that fails, permanently breaking spawning.
+
 
 

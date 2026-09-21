@@ -131,15 +131,15 @@ Full token table and rules: [`references/profiles_and_tags.md`](references/profi
 
 ## 7. Verified Engine Pitfalls & Workarounds
 
-- **[HARD] Turret 800m Default Clamp**: weapon ranges clamped to 800m on spawn — run `[SetWeaponsToMaxRange:true]` for long-range engagement. → `third_party_integrations.md`
-- **[HARD] Economy Store Grid Sales**: store prefabs must be under a `<FactionType>` with subtype `Builder` in `<GridsForSale>`; 124m clearance radius. → `economy_and_stores.md`
-- **[HARD] `[Type:WaypointNear]`/`[Type:WaypointFar]` Crash**: indexes waypoints without count check → use `[Type:TargetNear]`/`[Type:TargetFar]`. → `diagnostics_and_troubleshooting.md` §4.4
-- **[HARD] `ChangeBlocksShareModeAll` Bug**: indexing bug throws `IndexOutOfRangeException` — do not use. → diagnostics §4.5
-- **[HARD] `[Type:InsideZone]` vs `[Type:InsideActiveZone]`**: `InsideZone` is `true` even for deactivated zones — use the Active variant. → `events_and_zones.md` §4
-- **[HARD] Dereliction Percentage Gating**: percentages ignored without `[UseSeparatePercentages:true]`. → `manipulation_and_dereliction.md` §3
-- **[HARD] Weapon Randomizer Public Definition**: non-public weapon definitions skipped unless `<Public>true</Public>`. → manipulation §2
-- **[SOFT] WeaponCore 2 Fixed Weapon Proxy**: fixed rocket launchers/railguns may fail natively — proxy via a Timer Block action. → `third_party_integrations.md`
-- **[SOFT] Anti-Clang Aircraft Force-Despawn**: force-despawn disabled aircraft to avoid falling-airframe Havok loops. → diagnostics §5
+- **[HARD] Turret 800m Default Clamp**: weapon ranges clamped to 800m on spawn — run `[SetWeaponsToMaxRange:true]` for long-range engagement. → [`references/third_party_integrations.md`](references/third_party_integrations.md)
+- **[HARD] Economy Store Grid Sales**: store prefabs must be under a `<FactionType>` with subtype `Builder` in `<GridsForSale>`; 124m clearance radius. → [`references/economy_and_stores.md`](references/economy_and_stores.md)
+- **[HARD] `[Type:WaypointNear]`/`[Type:WaypointFar]` Crash**: indexes waypoints without count check → use `[Type:TargetNear]`/`[Type:TargetFar]`. → [`references/diagnostics_and_troubleshooting.md`](references/diagnostics_and_troubleshooting.md) §4.4
+- **[HARD] `ChangeBlocksShareModeAll` Bug**: indexing bug throws `IndexOutOfRangeException` — do not use. → [`references/diagnostics_and_troubleshooting.md`](references/diagnostics_and_troubleshooting.md) §4.5
+- **[HARD] `[Type:InsideZone]` vs `[Type:InsideActiveZone]`**: `InsideZone` is `true` even for deactivated zones — use the Active variant. → [`references/events_and_zones.md`](references/events_and_zones.md) §4
+- **[HARD] Dereliction Percentage Gating**: percentages ignored without `[UseSeparatePercentages:true]`. → [`references/manipulation_and_dereliction.md`](references/manipulation_and_dereliction.md) §3
+- **[HARD] Weapon Randomizer Public Definition**: non-public weapon definitions skipped unless `<Public>true</Public>`. → [`references/manipulation_and_dereliction.md`](references/manipulation_and_dereliction.md) §2
+- **[SOFT] WeaponCore 2 Fixed Weapon Proxy**: fixed rocket launchers/railguns may fail natively — proxy via a Timer Block action. → [`references/third_party_integrations.md`](references/third_party_integrations.md)
+- **[SOFT] Anti-Clang Aircraft Force-Despawn**: force-despawn disabled aircraft to avoid falling-airframe Havok loops. → [`references/diagnostics_and_troubleshooting.md`](references/diagnostics_and_troubleshooting.md) §5
 
 ---
 

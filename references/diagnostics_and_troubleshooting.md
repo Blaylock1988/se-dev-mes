@@ -255,6 +255,30 @@ When troubleshooting encounter loading or execution failures, search `SpaceEngin
   2. If the prefab has multiple Remote Controls, ensure `[AssignGridControlToFirstRemote:true]` is set in `[MES Spawn]` or the primary Remote Control has priority.
   3. Ensure ownership is properly assigned via `[FactionOwner:<FactionTag>]` in the `SpawnGroup`.
 
+### 9. Grid Sets Waypoints Properly But Refuses to Tilt Up or Down (Pitch Lock)
+- **Cause**:
+  1. `[LevelWithGravityWhenIdle:true]` state bleed: In `FighterPlane`, `Strike`, `Sniper`, and `HorseFighter`, entering idle sets `State.UseFlyLevelWithGravityIdle = true`. Because `EngageTarget` omits the idle parameter when calling `ActivateAutoPilot()`, the flag never resets, permanently latching `NewAutoPilotMode.LevelWithGravity` onto combat runs.
+  2. `[FlyLevelWithGravity:true]`: Actively forces `LevelWithGravity` across all flight modes in all subclasses.
+- **Result**: In `RotationSystem.cs:187`, `LevelWithGravity` forces gyro pitch to align solely with the planetary horizon, completely bypassing `directionToTarget`. The craft yaws toward waypoints but cannot dive to fire fixed guns or pitch up to climb toward breakaway waypoints.
+- **Fix**: In the `[RivalAI Autopilot]` profile, explicitly disable both tags:
+  ```xml
+  [FlyLevelWithGravity:false]
+  [LevelWithGravityWhenIdle:false]
+  ```
+
+### 10. NPC Reverses Into Space at Max Thrust / Endless Flip-and-Burn Slingshot
+- **Cause**: The grid lacks thrusters in all 6 cardinal directions (particularly missing backward/reverse braking thrusters).
+- **Result**:
+  1. In `ThrustSystem.cs`, exceeding `MaxSpeed + MaxSpeedTolerance` commands 100% reverse thrust (`SetZ(true, true, 1)`) and drops forward thrusters to `0.0001f`. Without reverse thrusters, braking force is 0.
+  2. `CalculateStoppingDistance()` computes 0 stopping distance, causing the grid to blow past waypoints at max speed.
+  3. Once past the waypoint, `RotationSystem.cs` rotates the craft 180° to face the waypoint behind it.
+  4. Moving backwards relative to its heading at max speed, `velocityToTargetAngle` exceeds `MaxVelocityAngleForSpeedControl`, triggering 100% forward thrust override into deep space.
+- **Fix**:
+  1. Add at least one working thruster in all six cardinal directions.
+  2. For atmospheric aircraft with forward-only thrust, switch behavior subclass to `FighterPlane` (which uses velocity-aligned climbing breakaway without braking).
+  3. For thrust-driven rovers, ensure Down thrusters (artificial downforce), Up thrusters (altitude clamping), and Backward thrusters (waypoint deceleration) are installed.
+
+
 ---
 
 ## 5. Sim-Speed Health & Anti-Clang Physics Mitigations

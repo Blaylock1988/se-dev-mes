@@ -26,15 +26,21 @@ Write-Host ""
 
 # Step 1: Rebuild Tag Cache
 Write-Host "[1/4] Rebuilding offline tag cache from MES source..." -ForegroundColor Yellow
-$pyArgs = @("scripts/query_mes_tags.py", "--rebuild-cache")
+$pyScript = Join-Path $PSScriptRoot "query_mes_tags.py"
+$pyArgs = @($pyScript, "--rebuild-cache")
 if (-not [string]::IsNullOrWhiteSpace($MesPath)) {
     $pyArgs += @("--path", $MesPath)
 }
 & python @pyArgs
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERROR] Failed to rebuild tag cache!" -ForegroundColor Red
-    exit 1
+    $cacheFile = Join-Path $PSScriptRoot "mes_tag_cache.json"
+    if (Test-Path $cacheFile) {
+        Write-Host "[WARN] Live MES source not found; falling back to existing offline tag cache." -ForegroundColor Yellow
+    } else {
+        Write-Host "[ERROR] Failed to rebuild tag cache and no offline cache exists!" -ForegroundColor Red
+        exit 1
+    }
 }
 
 # Step 2: Pre-Flight Verification on Examples

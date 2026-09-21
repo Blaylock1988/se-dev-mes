@@ -22,11 +22,54 @@ from datetime import datetime, timezone
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(SCRIPT_DIR, "mes_tag_cache.json")
 
-CANDIDATE_PATHS = [
-    os.path.expandvars(r'%AppData%\SpaceEngineers\Mods\Modular-Encounters-Systems\Data\Scripts\ModularEncountersSystems'),
-    r'C:\Program Files (x86)\Steam\steamapps\workshop\content\244850\1521905890\Data\Scripts\ModularEncountersSystems',
-    os.path.expandvars(r'%UserProfile%\AppData\Roaming\SpaceEngineers\Mods\Modular-Encounters-Systems\Data\Scripts\ModularEncountersSystems'),
-]
+def get_candidate_paths():
+    candidates = []
+
+    # 1. Environment-derived AppData / Roaming paths
+    appdata = os.environ.get('APPDATA') or os.path.expandvars(r'%AppData%')
+    if appdata and os.path.isdir(appdata):
+        candidates.append(os.path.join(appdata, 'SpaceEngineers', 'Mods', 'Modular-Encounters-Systems', 'Data', 'Scripts', 'ModularEncountersSystems'))
+        candidates.append(os.path.join(appdata, 'SpaceEngineers', 'Mods', 'Modular-Encounters-Systems'))
+
+    userprofile = os.environ.get('USERPROFILE') or os.path.expanduser('~')
+    if userprofile and os.path.isdir(userprofile):
+        candidates.append(os.path.join(userprofile, 'AppData', 'Roaming', 'SpaceEngineers', 'Mods', 'Modular-Encounters-Systems', 'Data', 'Scripts', 'ModularEncountersSystems'))
+        candidates.append(os.path.join(userprofile, 'AppData', 'Roaming', 'SpaceEngineers', 'Mods', 'Modular-Encounters-Systems'))
+        candidates.append(os.path.join(userprofile, 'source', 'repos', 'Modular-Encounters-Systems'))
+        candidates.append(os.path.join(userprofile, 'source', 'repos', 'MES'))
+
+    # 2. Multi-drive Steam Workshop paths (Space Engineers appid 244850, MES item 1521905890)
+    for d in ['C', 'D', 'E', 'F', 'G', 'H', 'Z']:
+        drive_root = f"{d}:\\"
+        if not os.path.exists(drive_root):
+            continue
+        steam_bases = [
+            os.path.join(drive_root, 'Program Files (x86)', 'Steam'),
+            os.path.join(drive_root, 'Program Files', 'Steam'),
+            os.path.join(drive_root, 'Steam'),
+            os.path.join(drive_root, 'SteamLibrary'),
+        ]
+        for sb in steam_bases:
+            ws_item = os.path.join(sb, 'steamapps', 'workshop', 'content', '244850', '1521905890')
+            candidates.append(os.path.join(ws_item, 'Data', 'Scripts', 'ModularEncountersSystems'))
+            candidates.append(ws_item)
+
+    return candidates
+
+def resolve_mes_path(path):
+    if not path or not os.path.isdir(path):
+        return None
+    scripts_sub = os.path.join(path, 'Data', 'Scripts', 'ModularEncountersSystems')
+    if os.path.isdir(scripts_sub):
+        return scripts_sub
+    return path
+
+def detect_mes_path():
+    for path in get_candidate_paths():
+        resolved = resolve_mes_path(path)
+        if resolved and os.path.isdir(resolved):
+            return resolved
+    return None
 
 PROFILE_FILES = {
     'RivalAI Action': ['ActionReferenceProfile.cs', 'ActionProfile.cs'],
@@ -84,12 +127,6 @@ TYPE_MAP = {
     'TagDateTimeCheck': 'DateTime / TimeSpan (ms or ISO)',
     'CustomTagParse': 'custom / block parse',
 }
-
-def detect_mes_path():
-    for path in CANDIDATE_PATHS:
-        if os.path.isdir(path):
-            return path
-    return None
 
 def find_mes_files(mes_path):
     file_map = {}
@@ -218,7 +255,7 @@ def main():
     parser.add_argument('--json', action='store_true', help='Output results as JSON (token-lean for agent scripts)')
     args = parser.parse_args()
 
-    mes_path = args.path or detect_mes_path()
+    mes_path = resolve_mes_path(args.path) if args.path else detect_mes_path()
 
     if args.rebuild_cache:
         if not mes_path or not os.path.isdir(mes_path):

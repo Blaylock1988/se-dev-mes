@@ -57,6 +57,25 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# Step 2.5: SKILL.md Size Budget Gate (Progressive Disclosure / Harness Portability)
+# Cline and Anthropic Agent Skills both cap the SKILL.md body at 5,000 tokens (~20k ASCII chars).
+# Over-budget SKILL.md files are silently middle-truncated by harnesses (detail lost, no error shown).
+Write-Host "`n[2.5/4] Checking SKILL.md size budget (hard limit: 5,000 tokens)...`n" -ForegroundColor Yellow
+$skillMdPath = Join-Path $repoRoot "SKILL.md"
+$skillBytes = [System.IO.File]::ReadAllBytes($skillMdPath)
+$skillChars = ([System.Text.Encoding]::UTF8.GetString($skillBytes)).Length
+# Conservative estimate: ~3.9 chars per token for mixed English/markdown/code content
+$estimatedTokens = [math]::Ceiling($skillChars / 3.9)
+Write-Host ("  SKILL.md: {0:N0} chars, ~{1:N0} estimated tokens (limit: 5,000)" -f $skillChars, $estimatedTokens)
+if ($estimatedTokens -gt 5000) {
+    Write-Host "[ERROR] SKILL.md exceeds the 5,000-token budget (est. $estimatedTokens tokens)! Harnesses will silently middle-truncate the injected content, dropping core sections. Move detail into references/*.md and keep SKILL.md as a lean router." -ForegroundColor Red
+    exit 1
+} elseif ($estimatedTokens -gt 4200) {
+    Write-Host "[WARNING] SKILL.md is within 800 tokens of the 5,000 budget. Consider extracting more detail into references/*.md." -ForegroundColor Yellow
+} else {
+    Write-Host "  SKILL.md size budget OK." -ForegroundColor Green
+}
+
 # Step 3: Synchronize to Global Skill Directory
 Write-Host "`n[3/4] Synchronizing repository to global skill directory..." -ForegroundColor Yellow
 if (Test-Path $globalSkillPath) {

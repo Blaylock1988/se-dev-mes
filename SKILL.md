@@ -55,7 +55,7 @@ powershell -ExecutionPolicy Bypass -File scripts/Update-MesSkill.ps1
 This rebuilds the 1,600+ tag cache, verifies XML examples, runs linters, and mirrors updates to the global skill directory.
 
 ### D. Modular Reference Library (Progressive Disclosure)
-To optimize AI agent tokens and preserve context window space, detailed guides are partitioned into on-demand references:
+To optimize AI agent tokens and preserve context window space, detailed content is split into on-demand reference files. **Do not grow this SKILL.md file past the size budget**: both Cline and the Anthropic Agent Skills spec cap the SKILL.md body at **5,000 tokens** — over-budget files are silently middle-truncated by harnesses (detail lost with no visible error). Keep this file a lean router; all detail lives in `references/`:
 
 | Reference Document | Key Topics Covered |
 | :--- | :--- |
@@ -131,71 +131,36 @@ Full token table and rules: [`references/profiles_and_tags.md`](references/profi
 
 ## 7. Verified Engine Pitfalls & Workarounds
 
-- **[HARD] Turret 800m Default Clamp**: On grid spawn, MES clamps all automated weapon ranges to 800m (`GridEntity.cs:1736`). Action profiles must execute `[SetWeaponsToMaxRange:true]` to allow long-range weapons to engage past 800m.
-- **[HARD] Economy Store Grid Sales (`Builder` Subtype)**: In `FactionTypes_Economy.sbc`, prefabs sold at NPC store blocks **must** be listed under a `<FactionType>` with subtype `Builder` in `<GridsForSale>`. Grids will not spawn or offer under other faction types. Store blocks also enforce a strict **124m clearance radius**.
-- **[HARD] `[Type:WaypointNear]` / `[Type:WaypointFar]` Crash**: In `TriggerChecks.cs:77`, MES indexes `CargoShipWaypoints[0]` without checking `.Count > 0`. If waypoints are empty or completed, an unhandled `ArgumentOutOfRangeException` aborts the trigger loop. Use `[Type:TargetNear]` / `[Type:TargetFar]` instead.
-- **[HARD] `ChangeBlocksShareModeAll` Bug**: In `ActionSystem.cs:2412`, loop indexes outer variable `i` instead of inner `j`, throwing `IndexOutOfRangeException`. Do not use `ChangeBlocksShareModeAll`.
-- **[HARD] `[Type:InsideZone]` vs `[Type:InsideActiveZone]`**: `[Type:InsideZone]` evaluates `true` even when the target zone is deactivated! Use `[Type:InsideActiveZone]`.
-- **[HARD] Dereliction Percentage Gating**: `MinIntegrityPercentage` and `MinBuildPercentage` are completely ignored unless `[UseSeparatePercentages:true]` is explicitly declared in `[MES Dereliction]`.
-- **[HARD] Weapon Randomizer Public Definition Rule**: MES skips non-public weapon definitions unless `<Public>true</Public>` is declared in SBC or `WeaponModRules` overrides `AllowIfNonPublic: true`.
-- **[SOFT] WeaponCore 2 Fixed Weapon Proxy**: In WC2, fixed rocket launchers/railguns can fail when triggered natively by RivalAI. Proxy them via an action profile triggering a Timer Block.
-- **[SOFT] Anti-Clang Aircraft Force-Despawn**: Disabled aircraft should force-despawn immediately (`AttemptSmallDespawn`) to prevent falling airframes from penetrating terrain meshes and locking the server into continuous Havok collision loops.
+- **[HARD] Turret 800m Default Clamp**: weapon ranges clamped to 800m on spawn — run `[SetWeaponsToMaxRange:true]` for long-range engagement. → `third_party_integrations.md`
+- **[HARD] Economy Store Grid Sales**: store prefabs must be under a `<FactionType>` with subtype `Builder` in `<GridsForSale>`; 124m clearance radius. → `economy_and_stores.md`
+- **[HARD] `[Type:WaypointNear]`/`[Type:WaypointFar]` Crash**: indexes waypoints without count check → use `[Type:TargetNear]`/`[Type:TargetFar]`. → `diagnostics_and_troubleshooting.md` §4.4
+- **[HARD] `ChangeBlocksShareModeAll` Bug**: indexing bug throws `IndexOutOfRangeException` — do not use. → diagnostics §4.5
+- **[HARD] `[Type:InsideZone]` vs `[Type:InsideActiveZone]`**: `InsideZone` is `true` even for deactivated zones — use the Active variant. → `events_and_zones.md` §4
+- **[HARD] Dereliction Percentage Gating**: percentages ignored without `[UseSeparatePercentages:true]`. → `manipulation_and_dereliction.md` §3
+- **[HARD] Weapon Randomizer Public Definition**: non-public weapon definitions skipped unless `<Public>true</Public>`. → manipulation §2
+- **[SOFT] WeaponCore 2 Fixed Weapon Proxy**: fixed rocket launchers/railguns may fail natively — proxy via a Timer Block action. → `third_party_integrations.md`
+- **[SOFT] Anti-Clang Aircraft Force-Despawn**: force-despawn disabled aircraft to avoid falling-airframe Havok loops. → diagnostics §5
 
 ---
 
 ## 8. Diagnostics, Scaffolding & Tooling Suite
 
-All tools reside in the `scripts/` directory and can be executed directly:
+All tools reside in `scripts/` and run directly (see each script's `-Path` parameter):
 
-1. **Tag Inspector** ([`query_mes_tags.py`](scripts/query_mes_tags.py)): Inspect tags, data types, and master gates from MES source or offline cache:
-   ```bash
-   python scripts/query_mes_tags.py --tag Zone
-   python scripts/query_mes_tags.py --profile "RivalAI Action" --tag Spawner
-   ```
-2. **Staleness Checker** ([`check_mes_sync.py`](scripts/check_mes_sync.py)): Check for tag cache / source code version drift:
-   ```bash
-   python scripts/check_mes_sync.py
-   ```
-3. **Automated Skill Updater** ([`Update-MesSkill.ps1`](scripts/Update-MesSkill.ps1)): Rebuild cache, run linters, and sync to global skill directory:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts/Update-MesSkill.ps1
-   ```
-4. **Safe XML Formatter** ([`Format-MesSbc.ps1`](scripts/Format-MesSbc.ps1)): Formats XML while protecting `<Description>` and converting `<!-- -->` comments to `[//]`:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts/Format-MesSbc.ps1 -Path ".\Content\Data"
-   ```
-5. **Profile Snippet Injector** ([`Add-MesProfileSnippet.ps1`](scripts/Add-MesProfileSnippet.ps1)): Safely injects `EntityComponents` without breaking XML:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts/Add-MesProfileSnippet.ps1 -TargetFile ".\Data\Triggers.sbc" -SnippetFile ".\snippets\action.xml"
-   ```
-6. **SBC Deserialization Auditor** ([`audit_sbc.ps1`](scripts/audit_sbc.ps1)): Detects duplicate SubtypeIds, illegal comments, and deserialization traps:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts/audit_sbc.ps1 -Path ".\Content\Data"
-   ```
-7. **Semantic Tag Linter** ([`audit_mes_tags.ps1`](scripts/audit_mes_tags.ps1)): Checks master gates, zero-stripping bugs, and tag alignment:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts/audit_mes_tags.ps1 -Path ".\Content\Data"
-   ```
-8. **Cross-Reference Validator** ([`audit_mes_references.ps1`](scripts/audit_mes_references.ps1)): Validates all profile references across files:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts/audit_mes_references.ps1 -Path ".\Content\Data" -WarnOrphans -SkipPrefabs
-   ```
-9. **Prefab & Binary Cache Auditor** ([`audit_prefabs.ps1`](scripts/audit_prefabs.ps1)): Checks SubtypeId vs filename and purges stale `.sbcB5` binary caches:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts/audit_prefabs.ps1 -Path ".\Data\Prefabs" -CleanStaleB5
-   ```
-10. **Scaffolding Generator** ([`New-MesProfile.ps1`](scripts/New-MesProfile.ps1)): Generates production-ready encounter profiles:
-    ```powershell
-    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix MYMOD -Name ScrapWreck -Faction SPRT
-    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ConvoyLeaderEscort -ModPrefix MYMOD -Name CargoFreighter -Faction SPRT
-    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicZoneLadder -ModPrefix MYMOD -Name ContestedTerritory
-    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern StoreGrid -ModPrefix MYMOD -Name OutpostTrader -Faction TRAD
-    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern DynamicStateNpc -ModPrefix MYMOD -Name PatrolDrone -Faction SPRT
-    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern PlanetaryInstallation -ModPrefix MYMOD -Name OutpostAlpha -Faction SPRT
-    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern CombatDrone -ModPrefix MYMOD -Name HunterKiller -Faction SPRT
-    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern ReinforcementNetwork -ModPrefix MYMOD -Name StrikeNet -Faction SPRT
-    powershell -ExecutionPolicy Bypass -File scripts/New-MesProfile.ps1 -Pattern BossEncounter -ModPrefix MYMOD -Name OverlordCarrier -Faction SPRT
-    ```
+| Tool | Purpose | Example |
+| :--- | :--- | :--- |
+| `query_mes_tags.py` | Tag/data-type/master-gate lookup | `python scripts/query_mes_tags.py --tag Zone` |
+| `check_mes_sync.py` | Tag cache / MES source version drift | `python scripts/check_mes_sync.py` |
+| `Update-MesSkill.ps1` | Full sync workflow (cache rebuild, audits, global mirror, SKILL.md size gate) | `powershell -File scripts/Update-MesSkill.ps1` |
+| `Format-MesSbc.ps1` | XML formatting that protects `<Description>` | `powershell -File scripts/Format-MesSbc.ps1 -Path .\Content\Data` |
+| `Add-MesProfileSnippet.ps1` | Safe `EntityComponent` injection | `powershell -File scripts/Add-MesProfileSnippet.ps1 -TargetFile <sbc> -SnippetFile <xml>` |
+| `audit_sbc.ps1` | Deserializer hazards (dup SubtypeIds, illegal comments, encoding) | `powershell -File scripts/audit_sbc.ps1 -Path .\Content\Data` |
+| `audit_mes_tags.ps1` | Semantic tag linter (master gates, zero-stripping) | `powershell -File scripts/audit_mes_tags.ps1 -Path .\Content\Data` |
+| `audit_mes_references.ps1` | Cross-file profile reference validation | `powershell -File scripts/audit_mes_references.ps1 -Path .\Content\Data -WarnOrphans -SkipPrefabs` |
+| `audit_prefabs.ps1` | Prefab SubtypeId vs filename; stale `.sbcB5` purge | `powershell -File scripts/audit_prefabs.ps1 -Path .\Data\Prefabs -CleanStaleB5` |
+| `New-MesProfile.ps1` | Encounter scaffolding (`-Pattern` / `-ModPrefix` / `-Name` / `-Faction`) | `powershell -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix MYMOD -Name ScrapWreck -Faction SPRT` |
+
+Available `New-MesProfile.ps1` patterns: `DefendedWreck`, `ConvoyLeaderEscort`, `DynamicZoneLadder`, `StoreGrid`, `DynamicStateNpc`, `PlanetaryInstallation`, `CombatDrone`, `ReinforcementNetwork`, `BossEncounter`.
 
 ### B. In-Game Diagnostics & Agent Troubleshooting Protocol
 When an encounter fails to spawn, triggers don't fire, or AI malfunctions, instruct the user to toggle native diagnostic logging and copy logs to clipboard:

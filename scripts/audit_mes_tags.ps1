@@ -16,6 +16,7 @@
     11. Missing boolean master gates and list count mismatches in [MES Event Action].
     12. Missing boolean master gates and list count mismatches in [MES Event Condition].
     13. Invalid token usage ({Faction} inside MES Events, tokens in [Actions:] profile names).
+    14. Undefined or misspelled faction tags ([FactionOwner:], [FactionOverride:], [SpawnFactionTags:], [AllowedZoneFactions:], [RestrictedZoneFactions:]).
 .PARAMETER Path
     Path to search for .sbc files. Defaults to current directory.
 #>
@@ -28,6 +29,37 @@ $files = Get-ChildItem -Path $Path -Filter *.sbc -Recurse | Where-Object {
 }
 
 $issuesFound = 0
+
+# Harvest declared factions from workspace Factions*.sbc files
+$knownFactions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+# Primary known factions and reserved keywords (pass silently)
+$primaryFactions = @(
+    'SPRT', 'SPID',
+    'Nobody', 'UseBaseGameFactionTags', '{Faction}', '{Attacker}'
+)
+foreach ($pf in $primaryFactions) { [void]$knownFactions.Add($pf) }
+
+# Obscure vanilla / economy / campaign factions (soft informational notice, does not fail audit)
+$obscureVanillaFactions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$vanillaEconomyCampaign = @(
+    'CIVL', 'TRAD', 'ROBO', 'FSD', 'STEJ', 'KRI', 'INDEP', 
+    'SHIV', 'GTI', 'ROS', 'AMPH', 'BLDR', 'MINR', 'MILT', 'PIR8', 'RED', 'BLU'
+)
+foreach ($vf in $vanillaEconomyCampaign) { [void]$obscureVanillaFactions.Add($vf) }
+
+$factionFiles = Get-ChildItem -Path $Path -Filter *Faction*.sbc -Recurse -ErrorAction SilentlyContinue
+foreach ($ff in $factionFiles) {
+    $fContent = [System.IO.File]::ReadAllText($ff.FullName)
+    $tagMatches = [System.Text.RegularExpressions.Regex]::Matches($fContent, '<Tag>([^<]+)</Tag>')
+    foreach ($tm in $tagMatches) {
+        [void]$knownFactions.Add($tm.Groups[1].Value.Trim())
+    }
+    $attrMatches = [System.Text.RegularExpressions.Regex]::Matches($fContent, 'Tag="([^"]+)"')
+    foreach ($am in $attrMatches) {
+        [void]$knownFactions.Add($am.Groups[1].Value.Trim())
+    }
+}
 
 function Get-TagValues($block, $tagName) {
     if ($block -match "\[$tagName\s*:\s*([^\]]+)\]") {
@@ -88,6 +120,43 @@ foreach ($file in $files) {
         # Check 7: Debug tags in Action profiles (development diagnostic notice)
         if ($line -match '\[(DebugMessage|DebugChatMessage|DebugHudMessage):.*\]') {
             Write-Host "[WARN] $($file.Name):$lineNum - Debug tag [$($matches[1])] found. Ensure debug tags are removed before production release (do not use as substitute for NPC chat)." -ForegroundColor Yellow
+        }
+
+        # Check 14: Faction tag validation (detects typos that cause silent 0% spawn rate)
+        if ($line -match '\[(FactionOwner|FactionOverride|CheckReputationAgainstOtherNPCFaction)\s*:\s*([^\]]+)\]') {
+            $propName = $matches[1]
+            $fTag = $matches[2].Trim()
+            if ($fTag.Length -gt 0) {
+                if ($knownFactions.Contains($fTag)) {
+                    # Known primary or declared faction - passes silently
+                }
+                elseif ($obscureVanillaFactions.Contains($fTag)) {
+                    Write-Host "[INFO] $($file.Name):$lineNum - Faction tag '$fTag' in [${propName}:$fTag] is an obscure vanilla/economy faction. Verify this faction is active in world settings." -ForegroundColor Cyan
+                }
+                else {
+                    Write-Host "[WARN] $($file.Name):$lineNum - Faction tag '$fTag' in [${propName}:$fTag] is not defined in any local Factions*.sbc or known factions! Spawning will silently fail ('Could Not Get Valid NPC Faction')." -ForegroundColor Yellow
+                    $issuesFound++
+                }
+            }
+        }
+        if ($line -match '\[(AllowedZoneFactions|RestrictedZoneFactions|SpawnFactionTags)\s*:\s*([^\]]+)\]') {
+            $propName = $matches[1]
+            $rawList = $matches[2].Trim()
+            foreach ($item in ($rawList -split ',')) {
+                $fTag = $item.Trim()
+                if ($fTag.Length -gt 0) {
+                    if ($knownFactions.Contains($fTag)) {
+                        # Known primary or declared faction - passes silently
+                    }
+                    elseif ($obscureVanillaFactions.Contains($fTag)) {
+                        Write-Host "[INFO] $($file.Name):$lineNum - Faction tag '$fTag' in [${propName}:$rawList] is an obscure vanilla/economy faction. Verify this faction is active in world settings." -ForegroundColor Cyan
+                    }
+                    else {
+                        Write-Host "[WARN] $($file.Name):$lineNum - Faction tag '$fTag' in [${propName}:$rawList] is not defined in any local Factions*.sbc or known factions! Spawning will silently fail ('Could Not Get Valid NPC Faction')." -ForegroundColor Yellow
+                        $issuesFound++
+                    }
+                }
+            }
         }
     }
 

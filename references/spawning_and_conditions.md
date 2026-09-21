@@ -154,3 +154,64 @@ Used by global session-level events to spawn encounters at precise coordinates:
    - `[IgnoreSafetyChecks:true]`: Allows spawning near player grids or structures for scripted set-pieces.
    - `[InheritNpcAltitude:false]`: Uses absolute coordinate altitude rather than raycasting from a non-existent parent.
 
+---
+
+## 6. Faction Resolution & The Silent Spawn Rejection Pipeline [HARD]
+
+When an NPC spawn group is evaluated for spawning, MES resolves the owning faction tag before any grid is spawned. If the faction tag does not exist or has a typo, **the spawn group is silently discarded with a 0% spawn rate and no in-game warning or crash**.
+
+### A. The Resolution Code (`SpawnConditions.cs:2144-2168`)
+During `ValidNpcFactions()`, MES queries the active session factions:
+```csharp
+var initialFaction = MyAPIGateway.Session.Factions.TryGetFactionByTag(initialFactionTag);
+
+if (initialFaction != null) {
+    factionList.Add(initialFaction);
+} else {
+    if (initialFactionTag == "Nobody") {
+        resultList.Add("Nobody");
+    }
+    else if (initialFactionTag == "UseBaseGameFactionTags") {
+        foreach (var baseGameTags in spawnGroup.BaseGameFactionTags) {
+            resultList.Add(baseGameTags);
+        }
+    }
+    return resultList; // <--- Returns an EMPTY list (Count == 0)!
+}
+```
+
+### B. The Silent Drop (`SpawnGroupManager.cs:307-314`)
+When `ValidNpcFactions()` returns an empty list, `SpawnGroupManager` immediately skips the group:
+```csharp
+var validFactionsList = SpawnConditions.ValidNpcFactions(spawnGroup, conditions, environment.Position, overrideFaction, forceSpawn, collection);
+
+if (validFactionsList.Count == 0 && collection.OwnerOverride < 0) {
+    SpawnLogger.Queue("   - Could Not Get Valid NPC Faction.", SpawnerDebugEnum.SpawnGroup, addToReason: true);
+    continue; // Rejects group from eligible spawn pool!
+}
+```
+- The group is never added to `collection.SpawnGroupSublists`.
+- It has an absolute **0% chance of spawning naturally**.
+- **Admin Force-Spawning Fails**: Even `/mes spawn <SpawnGroup>` evaluates `ValidNpcFactions()`, which still returns 0 factions and fails to spawn.
+
+### C. Points of Failure & Where Typos Occur
+1. **`[FactionOwner:<Tag>]` in `[MES Spawn Conditions]`**: Default is `SPRT`. A typo here (e.g. `SPTR`) breaks all spawn conditions referencing the tag.
+2. **`[FactionOverride:<Tag>]` in `[MES Spawn Group]`**: Overrides `FactionOwner`. A typo here breaks the entire spawn group.
+3. **`[AllowedZoneFactions:<Tag>]` in `[Zone]`**: In `SpawnConditions.cs:2093`, if the resolved faction is not in the zone whitelist, spawning fails with:
+   `"Zone Check Failed: Faction '<tag>' is not among Allowed Zone Factions."`
+4. **`[SpawnFactionTags:<Tag>]` in `[MES Event Action]`**: Used with `[SpawnEncounter:true]`.
+5. **Missing Mod in World Save**: If a mod defining custom factions in `Factions.sbc` is omitted from the world save, or if `Factions.sbc` had XML syntax errors preventing it from loading, Space Engineers never registers the faction in `Session.Factions`, silently disabling all spawns for that faction.
+
+### D. Special Reserved Keywords (Bypassing Faction Lookup)
+- **`"Nobody"`**: Spawns the grid as completely unowned (neutral derelicts/stations).
+- **`"UseBaseGameFactionTags"`**: Instructs MES to read the vanilla `<FactionSubtypeIds>` defined directly in the `<SpawnGroup>` XML.
+
+### E. Faction Tag Conventions & Tiered Classification
+1. **Player vs. NPC Faction Length**:
+   - In Space Engineers, player-created factions in the GUI are strictly **3 characters**.
+   - NPC factions defined in `Factions*.sbc` should use **4 or more characters** (e.g. `SPRT`, `SPID`, `GAALSIEN`) to prevent naming collisions with player-created factions.
+2. **Tiered Validation**:
+   - **Tier 1 (Primary & Declared)**: `SPRT`, `SPID`, reserved tokens (`Nobody`, `UseBaseGameFactionTags`, `{Faction}`, `{Attacker}`), plus any faction declared in local `Factions*.sbc`. Pass silently.
+   - **Tier 2 (Obscure Vanilla / Economy / Campaign)**: `CIVL`, `TRAD`, `ROBO`, `FSD`, `STEJ`, `KRI`, `INDEP`, `SHIV`, `GTI`, `ROS`, `AMPH`, `BLDR`, `MINR`, `MILT`, `PIR8`, `RED`, `BLU`. Flagged as `[INFO]` (soft notice) since modders rarely target Keen economy/campaign factions and they require specific world settings to exist.
+   - **Tier 3 (Unrecognized / Typo)**: Any undefined tag causes silent 0% spawn drops and is flagged as `[WARN]`.
+

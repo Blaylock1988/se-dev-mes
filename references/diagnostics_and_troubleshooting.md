@@ -300,6 +300,18 @@ When troubleshooting encounter loading or execution failures, search `SpaceEngin
   ```
   Also ensure prefab wheel suspension friction is `<= 12%` so gyro yaw torque can pivot the vehicle smoothly.
 
+### 12. Spawn Group Never Spawns / Silent Rejection ("Could Not Get Valid NPC Faction")
+- **Cause**: The faction tag specified in `[FactionOwner]`, `[FactionOverride]`, or `[SpawnFactionTags]` does not exist in the world session (due to a typo, e.g. `SPTR` instead of `SPRT`, or because the mod containing `Factions.sbc` is missing or threw an XML deserialization error).
+- **Result**: In `SpawnConditions.cs:2144`, `MyAPIGateway.Session.Factions.TryGetFactionByTag()` returns `null`. `ValidNpcFactions()` returns an empty list (`Count == 0`). In `SpawnGroupManager.cs:309`, the spawn group is skipped with `continue;`, permanently locking its natural and admin force-spawn rate to **0%** with no in-game warning or crash.
+- **Log Diagnostic**: Search `SpaceEngineers.log` or spawner debug logs for:
+  ```text
+     - Could Not Get Valid NPC Faction.
+  ```
+- **Fix**:
+  1. Verify the exact spelling of `[FactionOwner:<Tag>]` in `[MES Spawn Conditions]` and `[FactionOverride:<Tag>]` in `[MES Spawn Group]`.
+  2. If using custom factions, verify that the defining `Factions.sbc` is loaded in the active world save and contains `<Tag>...</Tag>`.
+  3. For unowned derelicts or neutral stations, use the reserved keyword `[FactionOwner:Nobody]`.
+  4. Run `powershell -ExecutionPolicy Bypass -File scripts/audit_mes_tags.ps1` to detect undefined faction tags automatically.
 
 ---
 

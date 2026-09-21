@@ -138,6 +138,7 @@ Full token table and rules: [`references/profiles_and_tags.md`](references/profi
 - **[HARD] `[Type:InsideZone]` vs `[Type:InsideActiveZone]`**: `InsideZone` is `true` even for deactivated zones — use the Active variant. → [`references/events_and_zones.md`](references/events_and_zones.md) §4
 - **[HARD] Dereliction Percentage Gating**: percentages ignored without `[UseSeparatePercentages:true]`. → [`references/manipulation_and_dereliction.md`](references/manipulation_and_dereliction.md) §3
 - **[HARD] Weapon Randomizer Public Definition**: non-public weapon definitions skipped unless `<Public>true</Public>`. → [`references/manipulation_and_dereliction.md`](references/manipulation_and_dereliction.md) §2
+- **[HARD] Faction Resolution Drop**: non-existent or misspelled faction tag silently rejects spawn with 0% rate (`Could Not Get Valid NPC Faction`) → [`references/spawning_and_conditions.md`](references/spawning_and_conditions.md) §6
 - **[SOFT] WeaponCore 2 Fixed Weapon Proxy**: fixed rocket launchers/railguns may fail natively — proxy via a Timer Block action. → [`references/third_party_integrations.md`](references/third_party_integrations.md)
 - **[SOFT] Anti-Clang Aircraft Force-Despawn**: force-despawn disabled aircraft to avoid falling-airframe Havok loops. → [`references/diagnostics_and_troubleshooting.md`](references/diagnostics_and_troubleshooting.md) §5
 
@@ -155,7 +156,7 @@ All tools reside in `scripts/` and run directly (see each script's `-Path` param
 | `Format-MesSbc.ps1` | XML formatting that protects `<Description>` | `powershell -File scripts/Format-MesSbc.ps1 -Path .\Content\Data` |
 | `Add-MesProfileSnippet.ps1` | Safe `EntityComponent` injection | `powershell -File scripts/Add-MesProfileSnippet.ps1 -TargetFile <sbc> -SnippetFile <xml>` |
 | `audit_sbc.ps1` | Deserializer hazards (dup SubtypeIds, illegal comments, encoding) | `powershell -File scripts/audit_sbc.ps1 -Path .\Content\Data` |
-| `audit_mes_tags.ps1` | Semantic tag linter (master gates, zero-stripping) | `powershell -File scripts/audit_mes_tags.ps1 -Path .\Content\Data` |
+| `audit_mes_tags.ps1` | Semantic tag linter (master gates, zero-stripping, faction validation) | `powershell -File scripts/audit_mes_tags.ps1 -Path .\Content\Data` |
 | `audit_mes_references.ps1` | Cross-file profile reference validation | `powershell -File scripts/audit_mes_references.ps1 -Path .\Content\Data -WarnOrphans -SkipPrefabs` |
 | `audit_prefabs.ps1` | Prefab SubtypeId vs filename; stale `.sbcB5` purge | `powershell -File scripts/audit_prefabs.ps1 -Path .\Data\Prefabs -CleanStaleB5` |
 | `New-MesProfile.ps1` | Encounter scaffolding (`-Pattern` / `-ModPrefix` / `-Name` / `-Faction`) | `powershell -File scripts/New-MesProfile.ps1 -Pattern DefendedWreck -ModPrefix MYMOD -Name ScrapWreck -Faction SPRT` |

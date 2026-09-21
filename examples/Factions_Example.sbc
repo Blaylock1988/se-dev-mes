@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <!--
+    Example NPC Faction Definition for custom MES encounters.
+    NPC factions in Space Engineers should use 4 or more letters to prevent
+    name collisions with 3-letter player factions.
+  -->
+  <Factions>
+    <Faction Tag="GAALSIEN" Founder="Gaalsien Commander">
+      <Id>
+        <TypeId>MyObjectBuilder_FactionDefinition</TypeId>
+        <SubtypeId>GaalsienFaction</SubtypeId>
+      </Id>
+      <DisplayName>Gaalsien</DisplayName>
+      <IsDefault>true</IsDefault>
+      <DefaultRelation>Enemies</DefaultRelation>
+      <AcceptHumans>false</AcceptHumans>
+      <AutoAcceptMember>false</AutoAcceptMember>
+      <EnableAutoAccept>false</EnableAutoAccept>
+      <Description>Example hostile NPC faction for planetary encounters.</Description>
+    </Faction>
+  </Factions>
+</Definitions>

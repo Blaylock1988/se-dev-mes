@@ -197,3 +197,43 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
 | `TagCompareEnumCheck` | `[TagName:GreaterOrEqual]` | `Greater`, `GreaterOrEqual`, `Less`, `LessOrEqual`, `Equal`, `NotEqual` |
 | `TagDirectionEnumCheck`| `[TagName:Forward]` | `Forward`, `Backward`, `Left`, `Right`, `Up`, `Down` |
 
+---
+
+## 4. Built-in MES Core Profiles
+
+Modular Encounters Systems (MES) and RivalAI ship with default, built-in profiles that modders can reference directly in their encounters without defining them in custom `.sbc` files:
+
+### A. Manipulation Profiles
+- `MES-Manipulation-RivalAi` / `MES-Manipulation-RivalAI`: Default manipulation profile that enables RivalAI processing on spawned grids (`[UseRivalAi:true]`, `[RivalAiReplaceRemoteControl:true]`). Required on legacy-style spawn groups to hand control to RivalAI.
+- `MES-Manipulation-Loot`: Default inventory container population profile.
+- `MES-Manipulation-Dereliction`: Default dereliction setup applying cosmetic block damage.
+- `MES-Manipulation-DamageReduction`: Default resistance modifiers applied to NPC hulls.
+
+### B. Behavior Templates
+- `MES-Generic-Behavior-Passive`: Basic stationary/passive behavior for static installations or derelicts.
+- `MES-Generic-Behavior-Patrol`: Basic wandering patrol behavior.
+- `MES-Generic-Behavior-Horsefly`: Basic standoff harassment behavior for gunships.
+
+---
+
+## 5. Token Matrix & Scope (`IdsReplacer.cs`)
+
+| Token | Replaced With | Context Source | Supported Environments |
+| :--- | :--- | :--- | :--- |
+| `{Faction}` | Initial NPC faction tag (e.g. `GAALSIEN`) | `npcData.InitialFaction` | RivalAI Grid Triggers only |
+| `{SpawnGroupName}` | Name of the spawning spawn group | Spawning spawn group | RivalAI Grid Triggers only |
+| `{Position}` | Formatted `{X:... Y:... Z:...}` coordinates | Remote Control block position | RivalAI Grid Triggers only |
+| `{EventInstance}` | Unique ID of spawning event instance | `npcData.EventInstanceId` | RivalAI Grid Triggers only |
+| `{<CustomStringKey>}` | Value set by `[CustomStrings:Key,Value]` | `npcData.CustomStrings` | RivalAI Grid Triggers only |
+| `{<CustomCounterKey>}` | Value of grid counter | `npcData.CustomCountersVariables` | RivalAI Grid Triggers only |
+| `{<SandboxVarKey>}` | Value of session sandbox variable | `MyAPIGateway.Utilities.GetVariable` | **Both** RivalAI & MES Events |
+| `{PlayerName}` | Target/detected player's name | `BroadcastSystem.cs` / `EventAction` | RivalAI Chat & MES Event Chat |
+| `{GridName}` | Target/detected grid's name | `BroadcastSystem.cs` | RivalAI Chat only |
+| `{PlayerRelation}` | Relation to player (`Friendly`, `Neutral`, `Enemy`) | `BroadcastSystem.cs` | RivalAI Chat only |
+
+### Critical Token Rules
+1. **[HARD] MES Events Pass `npcData = null`**: `{Faction}`, `{SpawnGroupName}`, and `{<CustomStringKey>}` **never resolve in MES Events**; only `{<SandboxVarKey>}` and `{PlayerName}` (in chat) function.
+2. **[HARD] Profile SubtypeIds Resolve Statically**: Putting tokens in action profile names (e.g. `[Actions:MyAction-{Faction}]`) **fails to find the profile**. Token replacement only runs on dynamic runtime parameters (Command codes, Zone names, GPS names, Chat text, LCD text, Sandbox variables).
+3. **[HARD] No Rival Faction Token**: `{Faction}` always resolves to the NPC's *own* faction. There is no `{RivalFaction}` token.
+
+

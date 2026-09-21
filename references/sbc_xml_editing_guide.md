@@ -79,3 +79,40 @@ Keen's XML deserializer reads `<Description>` elements using `XmlReader.ReadElem
 - **Prefix Standard**: Always use `ModPrefix-ProfileType-Name` (e.g. `GVK-Trigger-Damage-Cruiser`).
 - **Single SubtypeId per `<Id>`**: Never place more than one `<SubtypeId>` in an `<Id>` block.
 
+---
+
+## 6. Deserializer Quirk Examples
+
+### A. Strict Single `<SubtypeId>` per `<Id>` Block
+Keen's XML deserializer strictly accepts **only one** `<SubtypeId>` per `<Id>` block:
+```xml
+<!-- INVALID: Second SubtypeId is discarded by deserializer; action fails to load -->
+<EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+  <Id>
+    <TypeId>Inventory</TypeId>
+    <SubtypeId>Trigger-OutsideZone</SubtypeId>
+    <SubtypeId>Action-OutsideZone</SubtypeId>
+  </Id>
+</EntityComponent>
+
+<!-- VALID: One definition per SubtypeId, each with its own <Id> block -->
+<EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+  <Id>
+    <TypeId>Inventory</TypeId>
+    <SubtypeId>Trigger-OutsideZone</SubtypeId>
+  </Id>
+</EntityComponent>
+```
+
+### B. Strict Single `<Id>` per `<Prefab>` Block
+Duplicate `<Id>` elements inside a `<Prefab>` cause Keen to read the first one and discard subsequent ones:
+```xml
+<!-- INVALID: Deserializer reads the first Id, registering prefab under wrong Subtype -->
+<Prefab xsi:type="MyObjectBuilder_PrefabDefinition">
+  <Id Type="MyObjectBuilder_PrefabDefinition" Subtype="NST Nav Tower" />
+  <Id Type="MyObjectBuilder_PrefabDefinition" Subtype="NST Base Site Tower" />
+  <CubeGrids>...</CubeGrids>
+</Prefab>
+```
+Both are enforced by `audit_sbc.ps1` (Check 3, XML DOM duplicate detection).
+

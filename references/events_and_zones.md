@@ -11,6 +11,16 @@ Unlike RivalAI Triggers which run locally on in-world grids via Remote Control b
 - **No Grid Required**: Executes even when no NPC grids exist in the world.
 - **Global Coordination**: Manages server-wide progression, zone radius expansions, territory ladders, weekly schedules, and scripted campaign encounters.
 
+### A. Tag-Name Matrix: RivalAI Grid Triggers vs. MES Event Actions
+MES Events and RivalAI Grid Triggers use **different tag names** for sub-profiles and lists. Using the wrong variant silently fails:
+
+| Feature | RivalAI Grid Action Tag | MES Event Action Tag | Notes |
+| :--- | :--- | :--- | :--- |
+| **Encounter Spawner** | `[Spawner:ProfileId]` | `[SpawnData:ProfileId]` | Using `[Spawner:]` in an Event Action causes silent failure (`Spawner.Count == 0`). |
+| **Chat Message** | `[Chat:ProfileId]` | `[ChatData:ProfileId]` | Using `[Chat:]` in an Event Action fails to attach the chat profile. |
+| **Counter Changes** | `[IncreaseSandboxCounters:Name]` | `[ChangeCounters:true]` + `[IncreaseCounters:Name]` | MES Event Actions **require** `[ChangeCounters:true]` gating. |
+| **Zone Resizing** | `[ChangeZoneByName:true]` + `[ZoneName:]` + `[ZoneRadiusChangeType:]` + `[ZoneRadiusChangeAmount:]` | `[ChangeZoneByName:true]` + `[ZoneNames:]` + `[ZoneRadiusChangeTypes:]` + `[ZoneRadiusChangeAmounts:]` | RivalAI actions use **singular** tag names; MES Event Actions use **plural lists**. |
+
 ---
 
 ## 2. Boolean Master-Gate Protocol (MES Events Only)

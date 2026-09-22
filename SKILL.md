@@ -140,7 +140,7 @@ Full token table and rules: [`references/profiles_and_tags.md`](references/profi
 - **[HARD] Dereliction Percentage Gating**: percentages ignored without `[UseSeparatePercentages:true]`. → [`references/manipulation_and_dereliction.md`](references/manipulation_and_dereliction.md) §3
 - **[HARD] Weapon Randomizer Public Definition**: non-public weapon definitions skipped unless `<Public>true</Public>`. → [`references/manipulation_and_dereliction.md`](references/manipulation_and_dereliction.md) §2
 - **[HARD] Faction Resolution Drop**: non-existent or misspelled faction tag silently rejects spawn with 0% rate (`Could Not Get Valid NPC Faction`) → [`references/spawning_and_conditions.md`](references/spawning_and_conditions.md) §6
-- **[SOFT] WeaponCore 2 Fixed Weapon Proxy**: fixed rocket launchers/railguns may fail natively — proxy via a Timer Block action. → [`references/third_party_integrations.md`](references/third_party_integrations.md)
+- **[SOFT] WeaponCore Fixed Guns — Mouse Control + Wide Tolerance**: WC fixed guns default to "Auto (AI Controlled)" which silently ignores MES fire commands. Set block to **Mouse Control** in the prefab (`scripts/wc_shootmode.py`). Also relax `[WeaponMaxAngleFromTarget]` to 8°–12° — gyro alignment flicker drops shots at tight tolerances. Timer Block proxy workaround is legacy/obsolete. → [`references/third_party_integrations.md`](references/third_party_integrations.md) §1C
 - **[SOFT] Anti-Clang Aircraft Force-Despawn**: force-despawn disabled aircraft to avoid falling-airframe Havok loops. → [`references/diagnostics_and_troubleshooting.md`](references/diagnostics_and_troubleshooting.md) §5
 
 ---

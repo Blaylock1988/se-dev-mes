@@ -31,12 +31,12 @@ MES contains built-in hooks for WeaponCore grids, but deep architectural mismatc
 - **Prefab Pre-Configuration**: Fixed forward-firing weapons must have their WeaponCore settings properly configured before saving the blueprint:
   - **The shoot mode must NOT be "Auto (AI Controlled)"** (see the first bullet below). Set it to **Mouse Control** and save the prefab/blueprint.
   - Correct weapon ID/submunition slot verified.
+- **[SOFT] Wide Aiming Tolerance**: Relaxing `[WeaponMaxAngleFromTarget]` from the default narrow value to **8°–12°** significantly helps MES fire fixed guns reliably. Gyro overshoot causes constant near-miss alignment failures at tight tolerances. This applies to **both WC and vanilla fixed weapons**. Confirmed on live server (GVK): wide tolerance is one of the effective workarounds even when Mouse Control mode is correctly set. See §1E for the full `[RivalAI Weapons]` template.
 - **The Alignment Flicker Trap**:
   - In `CoreWeapon.cs:443`, MES calls `APIs.WeaponCore.ToggleWeaponFire(true)` when aligned to target and immediately calls `ToggleWeaponFire(false)` if the grid alignment deviates by even a fraction of a degree (`WeaponMaxAngleFromTarget`).
   - Due to gyro overshoot and rotational damping, alignment flickers every tick. For beam weapons, burst cannons, or charge-up railguns, this causes constant stuttering and aborted firing cycles where weapons never complete a shot.
-- **The Timer Block Proxy**:
-  - Instead of letting MES fire the weapon directly, proxy fixed weapon firing through a Timer Block on the prefab.
-  - Use a RivalAI action profile (`[TriggerTimerBlocks:true]` + `[TimerBlockNames:FireFixedWeapons]`) to trigger the timer, which executes WeaponCore's "Shoot Once" or cycles "Shoot On/Off" for a fixed duration, completely decoupling weapon cycling from MES's jittery gyro alignment.
+- **[LEGACY] Timer Block Proxy** (no longer needed): Before the AiShoot root cause was identified, a common workaround was triggering a Timer Block that executed WC's own "Shoot Once" terminal action — bypassing the `ToggleWeaponFire` API entirely. This worked because WC honors its own terminal actions regardless of shoot mode. With Mouse Control now the correct fix, the proxy is obsolete for new builds. Existing prefabs that use it can be left as-is.
+
 
 ### D. The Target Lead Prediction Disaster
 - **[HARD] MES ignores WeaponCore's `AimLeadingPrediction`.** MES leads targets itself (`UseProjectileLeadPrediction` / `UseCollisionLeadPrediction` autopilot tags, `AutoPilotSystem.cs:1275-1290`); the WC weapon-definition field only affects WC's own aiming (turrets), so changing it does nothing for a fixed gun MES is flying.

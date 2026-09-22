@@ -54,6 +54,21 @@ powershell -ExecutionPolicy Bypass -File scripts/Update-MesSkill.ps1
 ```
 This rebuilds the 1,600+ tag cache, verifies XML examples, runs linters, and mirrors updates to the global skill directory.
 
+> [!IMPORTANT]
+> **Preferred invocation — `uv run` from skill root**: The skill ships a `pyproject.toml`. Run Python scripts with `uv run` from the skill directory; no venv setup needed:
+> ```powershell
+> cd "C:\Users\blayl\.gemini\config\skills\se-dev-mes"
+> uv run scripts/audit_unknown_tags.py "C:\path\to\mod\Content\Data"
+> uv run scripts/wc_shootmode.py list "C:\path\to\mod\Data\Prefabs"
+> ```
+> **When working inside a mod project**, use the `run-mes-audit.ps1` shim in the workspace repo instead — it resolves the skill path automatically:
+> ```powershell
+> .\run-mes-audit.ps1 -Audit sbc      # audit_sbc.ps1
+> .\run-mes-audit.ps1 -Audit unknown  # audit_unknown_tags.py
+> .\run-mes-audit.ps1 -Audit wc       # wc_shootmode.py list
+> ```
+> **Never** search for script files in the mod directory — they live in the skill.
+
 ### D. Modular Reference Library (Progressive Disclosure)
 To optimize AI agent tokens and preserve context window space, detailed content is split into on-demand reference files. **Do not grow this SKILL.md file past the size budget**: both Cline and the Anthropic Agent Skills spec cap the SKILL.md body at **5,000 tokens** — over-budget files are silently middle-truncated by harnesses (detail lost with no visible error). Keep this file a lean router; all detail lives in `references/`:
 

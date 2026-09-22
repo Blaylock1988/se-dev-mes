@@ -64,7 +64,7 @@ To optimize AI agent tokens and preserve context window space, detailed content 
 | [behaviors_and_autopilot.md](references/behaviors_and_autopilot.md) | 11 Behavior subclasses, Role vs. CombatType state machines, and autopilot profiles. |
 | [aircraft_behaviors_and_tuning.md](references/aircraft_behaviors_and_tuning.md) | Attack-run tuning, profile-swap triggers, fixed-gun gates, WeaponCore shoot mode (why MES fixed guns never fire), hover fighters, tuning method. |
 | [manipulation_and_dereliction.md](references/manipulation_and_dereliction.md) | Block replacements, weapon randomizer (`<Public>true</Public>`), dereliction, AiEnabled bots, and ContainerTypes loot tables. |
-| [events_and_zones.md](references/events_and_zones.md) | MES Events vs RivalAI Triggers, boolean master gates, zero-stripping bug, dynamic zones. |
+| [events_and_zones.md](references/events_and_zones.md) | MES Events vs RivalAI Triggers, boolean master gates, zero-stripping bug, dynamic zones, Event Templates & TemplateGroup hierarchy. |
 | [economy_and_stores.md](references/economy_and_stores.md) | 3-part store grid sales chain (`Builder` subtype rule), 124m clearance, dual icon/tooltip declarations, automated store refresh. |
 | [third_party_integrations.md](references/third_party_integrations.md) | WeaponCore (800m clamp, dynamic replacement range desync, fixed weapon timer proxy, lead prediction disaster, NPC weapon handicap architecture), Defense Shields, AiEnabled, Water Mod. |
 | [diagnostics_and_troubleshooting.md](references/diagnostics_and_troubleshooting.md) | In-game admin commands, log error signatures, sim-speed optimization, anti-clang mitigations. |

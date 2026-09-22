@@ -151,7 +151,20 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
   - `[CheckPlayerNear:true]` -> `[PlayerNearCoords:]`, `[PlayerNearDistanceFromCoords:]`.
   - `[CheckThreatScore:true]` -> `[ThreatScoreAmount:]`, `[ThreatScoreDistance:]`.
 
-### J. Manipulation Profiles
+### J. MES Event Template & TemplateGroup Profiles (Phase 4)
+- **`[MES Event TemplateGroup]`** (`TemplateEventGroup`): A named pool container. Link to a `[MES Event]` via `[TemplateGroupId:<SubtypeId>]` on the Event. Lists templates with `[Templates:<SubtypeId>]` (repeating tag, one per template).
+- **`[MES Event Template]`**: An individual action payload variant. Uses the exact same master-gate system as `[MES Event Action]` (§2.A). Selected randomly from the group each time the Event fires.
+- **[HARD] Phase 4 registration**: Both are registered in Phase 4, **after** `[MES Event]` (Phase 3). The Event profile lookup completes at runtime, not at load time, so registration order is safe.
+- **[HARD] `[ContractBlocks:<DisplayName>]`**: The display block name on the grid. **Single-use per profile** — only the first occurrence is parsed. A second `[ContractBlocks:]` line in the same profile silently overwrites the first. Use exactly one per profile block. Example:
+  ```
+  [ApplyContractProfiles:true]
+  [ClearContractContentsFirst:true]
+  [ContractBlocks:NPC Contracts]
+  [ContractBlockProfiles:GVK-EscortContracts-Board]
+  ```
+- Full hierarchy, limits, and example: [`references/events_and_zones.md`](references/events_and_zones.md) §5.
+
+### K. Manipulation Profiles
 - **Header**: `[MES Manipulation]`
 - **Key Tags**:
   - `[UseBlockReplacer:bool]`, `[BlockReplacementProfiles:<SubtypeId>]`.
@@ -162,7 +175,7 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
   - `[ArmorSkins:<string>]`, `[RecolorOld:<Vector3D>]`, `[RecolorNew:<Vector3D>]`.
   - `[ConvertToAtmospheric:bool]`, `[ConvertToHydrogen:bool]`.
 
-### K. Loot Profiles
+### L. Loot Profiles
 - **Header**: `[MES Loot]`
 - **Key Tags**:
   - `[ContainerTypes:<ContainerTypeId>]`.
@@ -171,7 +184,7 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
   - `[AppendNameToBlock:bool]`, `[AppendedName:<string>]` (Note: suffix often fails to apply in MES due to engine bug).
   - `[AddDatapads:bool]`, `[DatapadFileSource:<SubtypeId>]`, `[DatapadCount:<int>]`.
 
-### L. Faction Icon Profiles
+### M. Faction Icon Profiles
 - **Header**: `[MES Faction Icon]`
 - **Purpose**: Bypasses the vanilla `SANDBOX_0_0_0_.sbs` save lock and Keen's default black faction color bug by programmatically updating faction colors via `MyAPIGateway.Session.Factions.EditFaction(...)` in memory during startup (Phase 1).
 - **Key Tags**:

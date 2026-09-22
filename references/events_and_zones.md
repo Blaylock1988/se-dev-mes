@@ -110,3 +110,70 @@ Zones define spatial volumes that enforce territory rules, modify spawn pools, a
 3. **[HARD] Blacklist Behavior**:
    - `RestrictedZoneSpawnGroups` functions as an inverted **blacklist** (`if (collection.RestrictedZoneSpawnGroups.Contains(spawnGroup.SpawnGroupName)) continue;`), blocking matching groups rather than whitelisting them.
 
+---
+
+## 5. MES Event Templates & TemplateGroup
+
+`[MES Event Template]` and `[MES Event TemplateGroup]` are a **parameterized action/condition pooling** system layered on top of the base `[MES Event]` system. They allow a single `[MES Event]` to randomly select from a pool of action variants at runtime.
+
+### A. Three-Level Hierarchy
+
+```
+[MES Event]                     ← session-level scheduler (Phase 3)
+  └─ [MES Event TemplateGroup]  ← named pool container (Phase 4)
+       └─ [MES Event Template]  ← individual parameterized variant (Phase 4)
+```
+
+- **[MES Event]**: The server-authoritative scheduler. Fires on cooldown, evaluates conditions, then selects and runs one or more templates from an attached TemplateGroup.
+- **[MES Event TemplateGroup]** (`TemplateEventGroup`): A named container that holds a list of Template SubtypeIds. Referenced from the Event profile by `[TemplateGroupId:<SubtypeId>]`. Registered in **Phase 4** — after Events (Phase 3) — so it can safely reference Template profiles.
+- **[MES Event Template]**: A parameterized action payload. Shares the same master-gate system as `[MES Event Action]` (see §2.A). Each template is an independent profile with its own SubtypeId.
+
+### B. Key Rules & Limits
+
+> [!CAUTION]
+> **Phase 4 registration**: `[MES Event TemplateGroup]` is registered in Phase 4, **after** `[MES Event]` (Phase 3). If a TemplateGroup SubtypeId is referenced in an Event before Phase 4 completes, the lookup returns null and the group is silently skipped. Always define TemplateGroup and Template profiles in separate `.sbc` files from the Event, or earlier in load order.
+
+- **[HARD] `[TemplateGroupId:]` is the link**: The `[MES Event]` profile must include `[TemplateGroupId:<SubtypeId>]` pointing to a `[MES Event TemplateGroup]` profile. Without this, no template selection occurs.
+- **[HARD] Template selection is random per fire**: Each time the Event fires, MES randomly selects one Template from the group's list (unless `[UseAllTemplates:true]` is set, which runs all). Order in the list is not guaranteed.
+- **[HARD] Master gates apply**: Each `[MES Event Template]` uses the same `[ChangeCounters:true]`, `[SpawnEncounter:true]`, `[UseChatBroadcast:true]` master gates as `[MES Event Action]` (§2.A). Omitting a gate causes that action to silently no-op.
+- **[SOFT] No cross-template state sharing**: Each template executes in isolation. There is no built-in mechanism to pass results from one template to another within a single Event fire.
+- **`[ContractBlocks:<DisplayName>]` — single-use per action/template**: Only the **first** `[ContractBlocks:]` line is parsed. A second `[ContractBlocks:]` in the same profile block silently overwrites the first, resulting in only one contract board being targeted. Use one `[ContractBlocks:]` per profile.
+
+### C. Minimal Example
+
+```xml
+<!-- Phase 3: The Event references a TemplateGroup -->
+<EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+  <Id><TypeId>Inventory</TypeId><SubtypeId>GVK-Event-RandomEncounter</SubtypeId></Id>
+  <Description>
+    [MES Event]
+    [UseEvent:true]
+    [MinCooldownMs:300000]
+    [MaxCooldownMs:600000]
+    [TemplateGroupId:GVK-TemplateGroup-RandomEncounters]
+  </Description>
+</EntityComponent>
+
+<!-- Phase 4: TemplateGroup lists the variants -->
+<EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+  <Id><TypeId>Inventory</TypeId><SubtypeId>GVK-TemplateGroup-RandomEncounters</SubtypeId></Id>
+  <Description>
+    [MES Event TemplateGroup]
+    [Templates:GVK-Template-ScoutRaid]
+    [Templates:GVK-Template-CargoAmbush]
+    [Templates:GVK-Template-PatrolSweep]
+  </Description>
+</EntityComponent>
+
+<!-- Phase 4: One template variant -->
+<EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+  <Id><TypeId>Inventory</TypeId><SubtypeId>GVK-Template-ScoutRaid</SubtypeId></Id>
+  <Description>
+    [MES Event Template]
+    [SpawnEncounter:true]
+    [SpawnData:GVK-Spawn-ScoutRaid]
+    [UseChatBroadcast:true]
+    [ChatData:GVK-Chat-ScoutRaid]
+  </Description>
+</EntityComponent>
+```

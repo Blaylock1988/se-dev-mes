@@ -110,7 +110,7 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
   - `[UseVelocityCollisionEvasion:bool]`, `[CollisionEvasionWaypointCalculatedAwayFromEntity:bool]`.
   - `[AllowStrafing:bool]`, `[StrafeMinDurationMs:<int>]`, `[StrafeMaxDurationMs:<int>]`.
   - `[UseProjectileLeadPrediction:bool]`.
-  - `[StrikeBeginPlanetAttackRunDistance:<float>]`, `[StrikeBreakawayDistance:<float>]`.
+  - `[AttackRunDistancePlanet:<float>]`, `[AttackRunBreakawayDistance:<float>]`, `[OffsetPlanetMinDistFromTarget:<float>]` (the `Strike*` names are behavior-level tags that an attached autopilot profile overrides; `AttackRunMaxTimeTrigger` has no parser).
   - `[BarrelRollMinDurationMs:<int>]`, `[RamMinDurationMs:<int>]`.
 
 ### F. Target Profiles

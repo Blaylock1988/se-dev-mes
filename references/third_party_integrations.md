@@ -27,8 +27,9 @@ MES contains built-in hooks for WeaponCore grids, but deep architectural mismatc
 - **Production Rule**: When designing high-stakes combat encounters on vanilla/unpatched MES builds, **do not dynamically replace primary WeaponCore weapons**. Bake the exact WeaponCore weapon blocks directly into the prefab blueprint with their ranges, targeting modes, and fire rates pre-configured.
 
 ### C. Getting MES to Fire WC Fixed Weapons (Prefab Setup & Proxying)
+- **[HARD] Why MES-driven fixed guns never fire: the default shoot mode ignores MES.** MES calls `ToggleWeaponFire` (`CoreWeapon.cs:443`), which WeaponCore turns into `RequestShootSync(0, On, Signals.On)` (CoreSystems `ApiBackend.cs:1151`). WeaponCore only acts on that "On" trigger when the weapon's shoot mode is not `AiShoot` (or the signal is `Manual`): `onConfirmed = Trigger == On && (ShootMode != AiShoot || Signal == Manual)` (`SessionUpdate.cs:576`). `AiShoot` (terminal: "Auto (AI Controlled)") is the default (`ProtoWeapon.cs:616`), and a fixed gun (`TrackTargets:false`, `TurretAttached:false`) cannot fire itself in it, so the command is dropped. Setting the block to **Mouse Control** makes MES-driven fixed guns fire (confirmed in game); `KeyToggle`/`KeyFire` also pass the code check but are untested. MES and the WC API cannot set the mode, so it must be saved in the prefab (protobuf in the block's `ModStorageComponent`). `scripts/wc_shootmode.py` lists and sets it, and `classify` separates fixed guns from turrets (leave turrets on Auto). If the Timer Block proxy below was built because MES's own firing never worked, this may have been the reason. Details: `aircraft_behaviors_and_tuning.md` section 3B.
 - **Prefab Pre-Configuration**: Fixed forward-firing weapons must have their WeaponCore settings properly configured before saving the blueprint:
-  - Weapon group and AI focus/auto-fire settings must be active.
+  - **The shoot mode must NOT be "Auto (AI Controlled)"** (see the first bullet below). Set it to **Mouse Control** and save the prefab/blueprint.
   - Correct weapon ID/submunition slot verified.
 - **The Alignment Flicker Trap**:
   - In `CoreWeapon.cs:443`, MES calls `APIs.WeaponCore.ToggleWeaponFire(true)` when aligned to target and immediately calls `ToggleWeaponFire(false)` if the grid alignment deviates by even a fraction of a degree (`WeaponMaxAngleFromTarget`).
@@ -38,6 +39,7 @@ MES contains built-in hooks for WeaponCore grids, but deep architectural mismatc
   - Use a RivalAI action profile (`[TriggerTimerBlocks:true]` + `[TimerBlockNames:FireFixedWeapons]`) to trigger the timer, which executes WeaponCore's "Shoot Once" or cycles "Shoot On/Off" for a fixed duration, completely decoupling weapon cycling from MES's jittery gyro alignment.
 
 ### D. The Target Lead Prediction Disaster
+- **[HARD] MES ignores WeaponCore's `AimLeadingPrediction`.** MES leads targets itself (`UseProjectileLeadPrediction` / `UseCollisionLeadPrediction` autopilot tags, `AutoPilotSystem.cs:1275-1290`); the WC weapon-definition field only affects WC's own aiming (turrets), so changing it does nothing for a fixed gun MES is flying.
 - **Why MES Misses 100% of Fixed Shots**:
   - In `AutoPilotSystem.cs:1304`, MES computes target lead using `VectorHelper.TrajectoryEstimation()`, which assumes a simple linear projectile speed, constant acceleration, and zero drag.
   - WeaponCore ammos feature complex ballistic physics: drag curves, acceleration profiles, gravity multipliers, multi-stage velocities, and submunitions that MES's solver cannot model.

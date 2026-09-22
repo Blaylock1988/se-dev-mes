@@ -86,7 +86,7 @@ Controls verbose diagnostic logging for RivalAI grid behaviors. Set `<Type>` to 
 | `AutoPilot` | Waypoint navigation, collision evasion vectors, and flight mode calculations. |
 | `TargetAcquisition`| Target scan passes, relation filtering, and potential target candidate lists. |
 | `TargetEvaluation` | Target priority scoring, distance weighting, and subsystem target locking. |
-| `Weapon` | WeaponCore/vanilla turret range clamping, firing sequences, and ammo checks. |
+| `Weapon` | WeaponCore/vanilla turret range clamping, firing sequences, and ammo checks. Per-gun status such as `NoAmmo`, `StaticWeaponNotAligned`, `ReadyToFire` (see `aircraft_behaviors_and_tuning.md` section 6). |
 | `Command` | Squad radio command transmissions, frequency matches, and recipient processing. |
 | `Chat` | Chat broadcast range checks, relation filtering, and broadcast transmission. |
 | `Collision` | Raycasting results, asteroid/terrain obstacle avoidance, and evasion maneuvers. |

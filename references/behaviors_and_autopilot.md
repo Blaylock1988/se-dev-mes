@@ -44,6 +44,8 @@ flowchart TD
 > [!NOTE]
 > Some community mods (such as `mes-shared-behaviors`) use custom strings (`[CustomStrings:Role,...]` / `[CustomStrings:CombatType,...]`) as arbitrary variable names to track states. These are user-defined string conventions, **not** native MES tags. The actual engine mechanisms doing the work are the native tags below.
 
+> **`[AutopilotProfile:]` takes a slot (`Primary`, `Secondary`, `Tertiary`), not a profile name** (`ActionReferenceProfile.cs:264`). The slots are filled by `[AutopilotData:]`, `[SecondaryAutopilotData:]` and `[TertiaryAutopilotData:]` on the behavior profile (`AutoPilotSystem.cs:401/421/441`). Each swap also re-activates the autopilot from the new profile's tags (see section 6D, and `aircraft_behaviors_and_tuning.md` section 2).
+
 ### State Switching Implementation:
 - **Transitioning to Combat**:
   Trigger on `[Type:Damage]` or `[Type:TargetNear]`:
@@ -52,7 +54,7 @@ flowchart TD
   [ChangeBehaviorSubclass:true]
   [NewBehaviorSubclass:Fighter]
   [ChangeAutopilotProfile:true]
-  [AutopilotProfile:CombatAutopilot]
+  [AutopilotProfile:Secondary]
   [EnableTriggerTags:InCombat]
   [DisableTriggerTags:Cruising]
   ```
@@ -63,7 +65,7 @@ flowchart TD
   [ChangeBehaviorSubclass:true]
   [NewBehaviorSubclass:CargoShip]
   [ChangeAutopilotProfile:true]
-  [AutopilotProfile:CruiseAutopilot]
+  [AutopilotProfile:Primary]
   [EnableTriggerTags:Cruising]
   [DisableTriggerTags:InCombat]
   ```
@@ -85,7 +87,7 @@ flowchart TD
 ### B. Combat Maneuvers & Firing Passes
 - `[UseProjectileLeadPrediction:true]`: Calculates target angular velocity and projectile velocity to lead shots.
 - `[AllowStrafing:true]`, `[StrafeMinDurationMs:3000]`, `[StrafeMaxDurationMs:6000]`: Lateral thruster bursts during combat.
-- `[StrikeBeginPlanetAttackRunDistance:600]`, `[StrikeBreakawayDistance:100]`: Distance thresholds for diving attack runs and breakaways.
+- `[AttackRunDistancePlanet:600]`, `[AttackRunBreakawayDistance:100]` (autopilot profile tags): distance thresholds for `Strike`/`FighterPlane` attack runs and breakaways. The `[StrikeBeginPlanetAttackRunDistance:]` / `[StrikeBreakawayDistance:]` behavior-level tags are ignored whenever an autopilot profile is attached (`Strike.cs:22-25`), and `[AttackRunMaxTimeTrigger:]` has no parser at all. See `aircraft_behaviors_and_tuning.md` section 1.
 - `[BarrelRollMinDurationMs:2000]`, `[BarrelRollMaxDurationMs:3000]`: Evasive corkscrew rolls when targeted by hostile lock.
 - `[RamMinDurationMs:6000]`: Emergency kamikaze ramming maneuver when severely damaged.
 
@@ -309,7 +311,7 @@ RivalAI does not drive `IMyMotorSuspension` wheel motors via the autopilot. Grou
 
 Setting artificial horizon leveling tags on combat craft causes total loss of pitch control, preventing grids from diving at ground targets or climbing toward waypoints:
 
-1. **The `LevelWithGravityWhenIdle` State-Bleed Bug**:
+1. **The `LevelWithGravityWhenIdle` State-Bleed Bug** (a second path: every `[ChangeAutopilotProfile]` swap runs `SetAutoPilotDataMode`, `ActionSystem.cs:1790` -> `AutoPilotSystem.cs:2370-2376`, which copies `LevelWithGravityWhenIdle` into the state and re-activates with default arguments, so the mode is also switched on by any profile swap):
    - In `AutoPilotSystem.ActivateAutoPilot()`:
      ```csharp
      if (useUserModeIdle != CheckEnum.Ignore)

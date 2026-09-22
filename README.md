@@ -54,6 +54,7 @@ se-dev-mes/
 │   ├── profiles_and_tags.md                # 30+ profile types, registration phases, tag types
 │   ├── spawning_and_conditions.md          # Spawners, environment gates, threat scoring
 │   ├── behaviors_and_autopilot.md          # 11 behavior subclasses, Role vs. CombatType, autopilot
+│   ├── aircraft_behaviors_and_tuning.md    # Attack runs, profile-swap triggers, fixed-gun gates, WC shoot mode, hover fighters
 │   ├── manipulation_and_dereliction.md     # Block replacement, weapon randomizer, dereliction
 │   ├── events_and_zones.md                 # MES Events vs Triggers, master gates, zero-stripping
 │   ├── economy_and_stores.md               # 3-part store grid sales, 124m clearance, store refresh
@@ -69,6 +70,9 @@ se-dev-mes/
 └── scripts/                                # Automation, diagnostics, and scaffolding suite
     ├── mes_tag_cache.json                  # Offline database of 1,600+ tags across 32 profiles
     ├── query_mes_tags.py                   # Tag inspector CLI (search local MES source or cache)
+    ├── audit_unknown_tags.py               # Finds tags MES silently ignores (checked against the tag cache)
+    ├── wc_shootmode.py                     # List/set the WeaponCore shoot mode in prefabs; classify fixed guns vs turrets
+    ├── PB_TurnTest.cs                      # Programmable Block script: flight-path turn vs nose turn
     ├── check_mes_sync.py                   # Automated staleness & version drift detector
     ├── Update-MesSkill.ps1                 # 1-step updater (rebuilds cache, runs tests, syncs global)
     ├── Format-MesSbc.ps1                   # Safe XML formatter protecting <Description> & comments

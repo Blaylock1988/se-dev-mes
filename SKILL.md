@@ -74,7 +74,7 @@ To optimize AI agent tokens and preserve context window space, detailed content 
 
 | Reference Document | Key Topics Covered |
 | :--- | :--- |
-| [profiles_and_tags.md](references/profiles_and_tags.md) | Catalog of 30+ profile types, Registration Phases 1–5, and tag types. |
+| [profiles_and_tags.md](references/profiles_and_tags.md) | Catalog of 30+ profile types, Registration Phases 1–5, tag types, token scope/rules, and the string-Tag broadcast system. |
 | [spawning_and_conditions.md](references/spawning_and_conditions.md) | Spawners, environment gates, threat scoring, altitude formulas, and event spawners. |
 | [behaviors_and_autopilot.md](references/behaviors_and_autopilot.md) | 11 Behavior subclasses, Role vs. CombatType state machines, and autopilot profiles. |
 | [aircraft_behaviors_and_tuning.md](references/aircraft_behaviors_and_tuning.md) | Attack-run tuning, profile-swap triggers, fixed-gun gates, WeaponCore shoot mode (why MES fixed guns never fire), hover fighters, tuning method. |
@@ -139,9 +139,11 @@ Full bugged-tag list and safe tags: [`references/events_and_zones.md`](reference
 
 ## 6. Token Matrix & Scope (`IdsReplacer.cs`)
 
-**[HARD]** `{Faction}`, `{SpawnGroupName}`, `{Position}`, and custom string/counter tokens resolve **only in RivalAI Grid Triggers**; MES Events pass `npcData = null`. `{<SandboxVarKey>}` works in both; `{PlayerName}` works in chat. Tokens in profile SubtypeIds **never resolve** (static lookup).
+**[HARD]** `{Faction}`, `{SpawnGroupName}`, `{Position}`, custom string/counter tokens resolve **only in RivalAI Grid Triggers** (MES Events pass `npcData = null`), except `{Faction}` inside `[SpawnData:]` on `[MES Event Action]` (bespoke replace fed by `[SpawnFactionTags:]`). `{<SandboxVarKey>}` works in both; `{PlayerName}` in chat. Tokens in profile SubtypeIds (`[Actions:]`, `[Triggers:]`, etc.) **never resolve**.
 
-Full token table and rules: [`references/profiles_and_tags.md`](references/profiles_and_tags.md) §5.
+**[HARD]** A separate string-**Tag** broadcast system (`[Tags:Value]` + `[ManuallyActivatedTriggerTags:]`/`[EnableTriggerTags:]`/`[ToggleEventTags:]`/etc.) lets one Action act on every Trigger/Event declaring a matching tag. Two non-cross-matching pools (Trigger vs. Event); a few consumers don't token-resolve depending on which profile type declares them; reaches only Triggers already attached to that grid's Behavior, never a global registry.
+
+Full token table, rules, and Tag broadcast system: [`references/profiles_and_tags.md`](references/profiles_and_tags.md) §5-6.
 
 ---
 

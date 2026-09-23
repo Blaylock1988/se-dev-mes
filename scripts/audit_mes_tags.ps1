@@ -15,8 +15,17 @@
     10. ContainerType master gates and list count mismatches in [RivalAI Action].
     11. Missing boolean master gates and list count mismatches in [MES Event Action].
     12. Missing boolean master gates and list count mismatches in [MES Event Condition].
-    13. Invalid token usage ({Faction} inside MES Events, tokens in [Actions:] profile names).
-    14. Undefined or misspelled faction tags ([FactionOwner:], [FactionOverride:], [SpawnFactionTags:], [AllowedZoneFactions:], [RestrictedZoneFactions:]).
+    13. Invalid token usage: {SpawnGroupName} anywhere in an [MES Event Action] (never
+        resolves, no NpcData); {Faction} in an [MES Event Action] outside of [SpawnData:]
+        (never resolves), or inside [SpawnData:] without a matching [SpawnFactionTags:]
+        entry (MES's Event-only bespoke {Faction} replace requires it); tokens in
+        [Actions:]/[Conditions:]/[Triggers:]/[TriggerGroups:] profile name references
+        (always static lookups, no substitution mechanism exists for these at all).
+    14. Faction tag internal consistency ([FactionOwner:], [FactionOverride:], [SpawnFactionTags:], [AllowedZoneFactions:], [RestrictedZoneFactions:]): a tag not declared in
+        any local Factions*.sbc is checked for consistent reuse across the mod (likely a
+        faction from another mod - INFO) vs. singleton/near-duplicate spellings (likely a
+        typo - WARN), since there is no single enumerable source of truth for factions
+        defined in arbitrary external/workshop mods.
 .PARAMETER Path
     Path to search for .sbc files. Defaults to current directory.
 #>
@@ -61,12 +70,54 @@ foreach ($ff in $factionFiles) {
     }
 }
 
-function Get-TagValues($block, $tagName) {
-    if ($block -match "\[$tagName\s*:\s*([^\]]+)\]") {
-        $val = $matches[1].Trim()
-        return ($val -split ',') | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -gt 0 }
+# Faction tags used but not declared in any local Factions*.sbc. Since encounters can
+# legitimately target factions defined in other workshop mods (a core server mod, a
+# faction pack, etc.) with no fixed, enumerable source of truth, these are NOT compared
+# against a hardcoded external list. Instead they're collected here and, after the scan,
+# checked for INTERNAL consistency: a tag reused identically across the mod is almost
+# certainly a real external faction; a tag that appears only once, or that differs from
+# another used tag by just one or two characters, is far more likely a typo.
+$unknownFactionUsages = [System.Collections.Generic.List[PSObject]]::new()
+
+function Get-LevenshteinDistance([string]$a, [string]$b) {
+    $lenA = $a.Length; $lenB = $b.Length
+    $d = New-Object 'int[,]' ($lenA + 1), ($lenB + 1)
+    for ($i = 0; $i -le $lenA; $i++) { $d[$i, 0] = $i }
+    for ($j = 0; $j -le $lenB; $j++) { $d[0, $j] = $j }
+    for ($i = 1; $i -le $lenA; $i++) {
+        for ($j = 1; $j -le $lenB; $j++) {
+            $cost = if ($a[$i - 1] -eq $b[$j - 1]) { 0 } else { 1 }
+            # Index expressions must be pre-computed into locals - PowerShell mis-parses
+            # inline arithmetic inside a multi-dim array subscript (e.g. $d[$i - 1, $j]),
+            # binding the comma as an array-literal separator instead of an index list.
+            $iPrev = $i - 1
+            $jPrev = $j - 1
+            $del = $d[$iPrev, $j] + 1
+            $ins = $d[$i, $jPrev] + 1
+            $sub = $d[$iPrev, $jPrev] + $cost
+            $d[$i, $j] = [Math]::Min([Math]::Min($del, $ins), $sub)
+        }
     }
-    return @()
+    return $d[$lenA, $lenB]
+}
+
+function Get-TagValues($block, $tagName) {
+    # MES allows a tag to either take a comma list on one line, OR be repeated on separate
+    # lines within the same profile (e.g. one [SpawnData:X] per line instead of a single
+    # comma-separated tag) - both are valid and MES treats them identically (TagStringListCheck
+    # just appends to the same list either way). A single -match only captures the first
+    # occurrence, silently under-counting and breaking every "list count must match" check
+    # below whenever a mod uses the repeated-line style - so every occurrence must be collected.
+    $results = [System.Collections.Generic.List[string]]::new()
+    $tagMatches = [regex]::Matches($block, "\[$tagName\s*:\s*([^\]]+)\]")
+    foreach ($tm in $tagMatches) {
+        $val = $tm.Groups[1].Value.Trim()
+        foreach ($v in ($val -split ',')) {
+            $vTrim = $v.Trim()
+            if ($vTrim.Length -gt 0) { $results.Add($vTrim) }
+        }
+    }
+    return $results
 }
 
 foreach ($file in $files) {
@@ -138,8 +189,7 @@ foreach ($file in $files) {
                     Write-Host "[INFO] $($file.Name):$lineNum - Faction tag '$fTag' in [${propName}:$fTag] is an obscure vanilla/economy faction. Verify this faction is active in world settings." -ForegroundColor Cyan
                 }
                 else {
-                    Write-Host "[WARN] $($file.Name):$lineNum - Faction tag '$fTag' in [${propName}:$fTag] is not defined in any local Factions*.sbc or known factions! Spawning will silently fail ('Could Not Get Valid NPC Faction')." -ForegroundColor Yellow
-                    $issuesFound++
+                    $unknownFactionUsages.Add([PSCustomObject]@{ Tag = $fTag; File = $file; Line = $lineNum; PropName = $propName })
                 }
             }
         }
@@ -160,8 +210,7 @@ foreach ($file in $files) {
                         Write-Host "[INFO] $($file.Name):$lineNum - Faction tag '$fTag' in [${propName}:$rawList] is an obscure vanilla/economy faction. Verify this faction is active in world settings." -ForegroundColor Cyan
                     }
                     else {
-                        Write-Host "[WARN] $($file.Name):$lineNum - Faction tag '$fTag' in [${propName}:$rawList] is not defined in any local Factions*.sbc or known factions! Spawning will silently fail ('Could Not Get Valid NPC Faction')." -ForegroundColor Yellow
-                        $issuesFound++
+                        $unknownFactionUsages.Add([PSCustomObject]@{ Tag = $fTag; File = $file; Line = $lineNum; PropName = $propName })
                     }
                 }
             }
@@ -241,8 +290,33 @@ foreach ($file in $files) {
                 Write-Host "[ERROR] $($file.Name) - [Chat:] tag does not work in MES Event Actions! Use [ChatData:] instead." -ForegroundColor Red
                 $issuesFound++
             }
-            if ($block -match '\{Faction\}' -or $block -match '\{SpawnGroupName\}') {
-                Write-Host "[ERROR] $($file.Name) - {Faction} and {SpawnGroupName} do not resolve in MES Events (npcData is null)!" -ForegroundColor Red
+            # {SpawnGroupName} never resolves in MES Events (npcData is null, and MES has
+            # no bespoke fallback for it anywhere). {Faction} is different: MES Events run
+            # a separate hardcoded {Faction}-only replace on [SpawnData:] values, fed from
+            # the positionally-matched [SpawnFactionTags:] list (Events/Action/
+            # EventActionExecution.cs) - so {Faction} inside [SpawnData:] is NOT dead, as
+            # long as [SpawnFactionTags:] is present (list-count alignment is verified
+            # separately by the SpawnEncounter list-mismatch check below). {Faction}
+            # anywhere else in the block still has no resolution path.
+            if ($block -match '\{SpawnGroupName\}') {
+                Write-Host "[ERROR] $($file.Name) - {SpawnGroupName} does not resolve in MES Events (npcData is null, no bespoke fallback exists for this token)!" -ForegroundColor Red
+                $issuesFound++
+            }
+            # [SpawnData:] can appear as a single comma-list OR repeated one-per-line (same
+            # quirk as Get-TagValues above) - a single Match only strips the first occurrence,
+            # so {Faction} in a second/third [SpawnData:] line would be wrongly flagged as
+            # "outside [SpawnData:]". Every occurrence must be stripped before checking what's
+            # left, and checked individually for whether it itself carries {Faction}.
+            $spawnDataTagMatches = [regex]::Matches($block, '\[SpawnData\s*:\s*([^\]]+)\]')
+            $blockMinusSpawnData = $block
+            foreach ($m in ($spawnDataTagMatches | Sort-Object -Property Index -Descending)) {
+                $blockMinusSpawnData = $blockMinusSpawnData.Remove($m.Index, $m.Length)
+            }
+            if ($blockMinusSpawnData -match '\{Faction\}') {
+                Write-Host "[ERROR] $($file.Name) - {Faction} does not resolve in MES Events (npcData is null) outside of [SpawnData:] tags fed by a matching [SpawnFactionTags:] entry!" -ForegroundColor Red
+                $issuesFound++
+            } elseif (($spawnDataTagMatches | Where-Object { $_.Value -match '\{Faction\}' }) -and ($block -notmatch '\[SpawnFactionTags\s*:')) {
+                Write-Host "[ERROR] $($file.Name) - {Faction} in [SpawnData:] requires a matching [SpawnFactionTags:] entry to resolve (MES's Event-only SpawnGroups replace) - no [SpawnFactionTags:] tag found in this profile!" -ForegroundColor Red
                 $issuesFound++
             }
 
@@ -320,6 +394,44 @@ foreach ($file in $files) {
             $cTargets = Get-TagValues $block 'CustomCountersTargets'
             if ($cNames.Count -ne $cTargets.Count) {
                 Write-Host "[ERROR] $($file.Name) - CustomCounters count ($($cNames.Count)) does not match CustomCountersTargets count ($($cTargets.Count))!" -ForegroundColor Red
+                $issuesFound++
+            }
+        }
+    }
+}
+
+# Post-scan: internal consistency check for faction tags not declared in any local
+# Factions*.sbc (see comment above $unknownFactionUsages for rationale).
+if ($unknownFactionUsages.Count -gt 0) {
+    Write-Host ""
+    Write-Host "--- Faction Tag Consistency Check ---" -ForegroundColor Cyan
+
+    $usagesByTag = $unknownFactionUsages | Group-Object -Property Tag
+    foreach ($group in $usagesByTag) {
+        $tag = $group.Name
+        $locations = ($group.Group | ForEach-Object { "$($_.File.Name):$($_.Line)" }) -join ', '
+        if ($group.Count -ge 2) {
+            Write-Host "[INFO] Faction tag '$tag' is not defined in any local Factions*.sbc, but is used consistently $($group.Count)x across this mod ($locations) - likely a faction defined in another mod. No action needed unless that mod is missing from the server." -ForegroundColor Cyan
+        } else {
+            Write-Host "[WARN] Faction tag '$tag' is not defined in any local Factions*.sbc and appears only once ($locations) - a unique, unrepeated spelling is the strongest signal of a typo. Verify it against the mod that actually defines this faction." -ForegroundColor Yellow
+            $issuesFound++
+        }
+    }
+
+    # Fuzzy near-duplicate check: catches typos like 'GAALSIEN' vs 'GAALSEIN' even when
+    # both spellings are reused consistently and would otherwise pass silently above.
+    # Scoped to only the externally-used (not locally declared) tags - $knownFactions and
+    # $primaryFactions are already vetted/intentional (e.g. 'SPRT' vs 'SPID' are two real,
+    # distinct factions that happen to differ by two characters) and must not be flagged.
+    $distinctTags = @($usagesByTag.Name) | Select-Object -Unique
+    for ($i = 0; $i -lt $distinctTags.Count; $i++) {
+        for ($j = $i + 1; $j -lt $distinctTags.Count; $j++) {
+            $tagA = $distinctTags[$i]; $tagB = $distinctTags[$j]
+            if ($tagA -eq $tagB) { continue }
+            $dist = Get-LevenshteinDistance $tagA $tagB
+            $shorterLen = [Math]::Min($tagA.Length, $tagB.Length)
+            if ($dist -gt 0 -and $dist -le 2 -and $shorterLen -ge 4) {
+                Write-Host "[WARN] Faction tags '$tagA' and '$tagB' differ by only $dist character(s) - possible typo. Verify these are intentionally different factions." -ForegroundColor Yellow
                 $issuesFound++
             }
         }

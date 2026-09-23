@@ -81,7 +81,7 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
   - **Weapons**: `[SetWeaponsToMaxRange:true]`, `[EnableWeaponRandomizer:true]`.
   - **Autopilot**: `[ChangeAutopilotProfile:true]` + `[AutopilotProfile:Primary/Secondary]`, `[ChangeAutopilotSpeed:true]` + `[NewAutopilotSpeed:<float>]`, `[ChangeAutopilotMinAltitude:true]` + `[NewAutopilotMinAltitude:<float>]` (use `-1` to reset).
   - **Trigger Control**: `[EnableTriggers:true]` + `[EnableTriggerNames:...]`, `[DisableTriggers:true]` + `[DisableTriggerNames:...]`, `[ResetCooldownTimeOfTriggers:true]` + `[ResetTriggerCooldownNames:...]`.
-  - **Tag-Based Trigger Control**: `[EnableTriggerTags:...]`, `[DisableTriggerTags:...]`.
+  - **Tag-Based Trigger/Event Broadcasts**: `[ManuallyActivateTrigger:true]` + `[ManuallyActivatedTriggerTags:...]`, `[EnableTriggerTags:...]`, `[DisableTriggerTags:...]`, `[ResetTriggerCooldownTags:...]`, `[ActivateEvent:true]` + `[ActivateEventTags:...]`, `[ToggleEvents:true]` + `[ToggleEventTags:...]`, `[ResetCooldownTimeOfEvents:true]` + `[ResetEventCooldownTags:...]` — full pool/master-gate/token-support table: §6 below.
   - **Command Broadcasting**: `[BroadcastCommandProfiles:true]` + `[CommandProfileIds:...]`.
   - **Store Updates**: `[ApplyStoreProfiles:true]`, `[ClearStoreContentsFirst:true]`, `[StoreBlocks:...]`, `[StoreProfiles:...]`.
   - **Container Loot**: `[ApplyContainerTypeToInventoryBlock:true]` + `[ContainerTypeBlockNames:...]` + `[ContainerTypeSubtypeIds:...]`.
@@ -235,20 +235,62 @@ Modular Encounters Systems (MES) and RivalAI ship with default, built-in profile
 | :--- | :--- | :--- | :--- |
 | `{Faction}` | Initial NPC faction tag (e.g. `GAALSIEN`) | `npcData.InitialFaction` | RivalAI Grid Triggers only |
 | `{SpawnGroupName}` | Name of the spawning spawn group | Spawning spawn group | RivalAI Grid Triggers only |
-| `{Position}` | Formatted `{X:... Y:... Z:...}` coordinates | Remote Control block position | RivalAI Grid Triggers only |
+| `{SpawnGroupNameTruncated}` | Same as `{SpawnGroupName}` with a trailing `_SpawnGroup` suffix stripped | Spawning spawn group | RivalAI Grid Triggers only |
+| `{Position}` | Formatted `{X:... Y:... Z:...}` coordinates | Remote Control block position | RivalAI Grid Triggers only, and only where the call site actually passes a position — a few don't, in which case it silently resolves to `{X:0 Y:0 Z:0}` instead of failing |
 | `{EventInstance}` | Unique ID of spawning event instance | `npcData.EventInstanceId` | RivalAI Grid Triggers only |
-| `{<CustomStringKey>}` | Value set by `[CustomStrings:Key,Value]` | `npcData.CustomStrings` | RivalAI Grid Triggers only |
-| `{<CustomCounterKey>}` | Value of grid counter | `npcData.CustomCountersVariables` | RivalAI Grid Triggers only |
-| `{<SandboxVarKey>}` | Value of session sandbox variable | `MyAPIGateway.Utilities.GetVariable` | **Both** RivalAI & MES Events |
+| `{CustomVariablesName}` | `npcData.CustomVariablesName`, copied from the SpawnGroup's own `CustomVariablesName` field at spawn | `ImprovedSpawnGroup.CustomVariablesName` | **[HARD] Dead in the current build**: no tag parser anywhere sets `ImprovedSpawnGroup.CustomVariablesName` (verified — no `TagParse.*Check(tag, ref CustomVariablesName)` exists in `ImprovedSpawnGroup.cs`). It is permanently `""`, so this token always resolves to an empty string. Do not rely on it. |
+| `{<CustomStringKey>}` | Value set by `[CustomStrings:Key,Value]` (paired with `[SetCustomStrings:true]`) | `npcData.CustomStrings` | RivalAI Grid Triggers only |
+| `{<CustomCounterKey>}` | Value set by `[CustomCountersVariables:Key,Value]` (paired with `[SetCustomCountersVariables:true]`) | `npcData.CustomCountersVariables` | RivalAI Grid Triggers only |
+| `{<SandboxVarKey>}` | Value of session sandbox variable (`MyAPIUtilities.Static.Variables` — the SE engine's own store, not MES-specific; also visible to PB scripts and other mods) | `MyAPIGateway.Utilities.GetVariable` | **Both** RivalAI & MES Events |
 | `{PlayerName}` | Target/detected player's name | `BroadcastSystem.cs` / `EventAction` | RivalAI Chat & MES Event Chat |
 | `{GridName}` | Target/detected grid's name | `BroadcastSystem.cs` | RivalAI Chat only |
 | `{PlayerRelation}` | Relation to player (`Friendly`, `Neutral`, `Enemy`) | `BroadcastSystem.cs` | RivalAI Chat only |
 
 ### Critical Token Rules
-1. **[HARD] MES Events Pass `npcData = null`**: `{Faction}`, `{SpawnGroupName}`, and `{<CustomStringKey>}` **never resolve in MES Events**; only `{<SandboxVarKey>}` and `{PlayerName}` (in chat) function.
-2. **[HARD] Profile SubtypeIds Resolve Statically**: Putting tokens in action profile names (e.g. `[Actions:MyAction-{Faction}]`) **fails to find the profile**. Token replacement only runs on dynamic runtime parameters (Command codes, Zone names, GPS names, Chat text, LCD text, Sandbox variables).
+1. **[HARD] MES Events Pass `npcData = null`**: `{Faction}`, `{SpawnGroupName}`, `{SpawnGroupNameTruncated}`, `{EventInstance}`, `{CustomVariablesName}`, `{Position}`, `{<CustomStringKey>}`, and `{<CustomCounterKey>}` **never resolve in MES Events**; only `{<SandboxVarKey>}` and `{PlayerName}` (in chat) function there. **One narrow exception**: `{Faction}` inside a `[SpawnData:]` value on an `[MES Event Action]` *does* resolve — via a separate, bespoke `{Faction}`-only `string.Replace()` in `EventActionExecution.cs` fed from the positionally-matched `[SpawnFactionTags:]` list, not `IdsReplacer`. This is the only token that resolves anywhere inside MES Events outside of Chat/sandbox vars.
+2. **[HARD] Profile SubtypeIds Resolve Statically**: Putting tokens in profile-name references (e.g. `[Actions:MyAction-{Faction}]`, and likewise `[Triggers:]`, `[Conditions:]`, `[TriggerGroups:]`, `[ManipulationProfiles:]`, `[LootProfiles:]`, `[ContainerTypes:]`) **fails to find the profile, in every context**. There is no substitution mechanism for these tags at all. Token replacement only runs on dynamic runtime parameters (Command codes, Zone names, GPS names, Chat text, LCD text, Sandbox variables) and on the specific fields listed in §6 below.
 3. **[HARD] No Rival Faction Token**: `{Faction}` always resolves to the NPC's *own* faction. There is no `{RivalFaction}` token.
 4. **[HARD] Tokens in Pre-Spawn Faction Tags Never Resolve**: `[FactionOwner:]`, `[FactionOverride:]`, and `[SpawnFactionTags:]` evaluate before any grid exists (`NpcData == null`). `IdsReplacer` does not run; tokens cause a literal string lookup in session factions that fails, permanently breaking spawning.
+5. **[HARD] `TrueSandboxBooleans` / `FalseSandboxBooleans` Are Not Symmetric**: on a `[RivalAI Condition]`, `TrueSandboxBooleans` resolves `{Faction}`/`{SpawnGroupName}` via its own hand-rolled replace (`ConditionProfile.cs`); `FalseSandboxBooleans` has **no** token substitution at all — the value goes straight to the sandbox-variable lookup literally.
+6. **[HARD] Several fields exist on both a RivalAI-side profile and an MES-Event-side profile with the same tag name but asymmetric token support** — `[ToggleEventTags:]`/`[ToggleEventIds:]`, `[ResetEventCooldownTags:]`/`[ResetEventCooldownIds:]`, and `[Waypoint:]` on a Spawner. See §6 below for the full rundown; this is a distinct, separate mechanism from the string-Tag broadcast system but shares the same dual-context trap.
 
+---
 
+## 6. String-Tag Broadcast System
+
+A separate mechanism from ordinary SubtypeId lookups (§2-4 above): instead of naming one specific profile, a tag-consuming field names a *label*, and every Trigger or Event profile that declares a matching `[Tags:Value]` is acted on at once. Many profiles are meant to share one tag on purpose so a single broadcast affects all of them — unlike SubtypeIds, a repeated `[Tags:]` value across profiles is correct, not a duplicate-definition bug.
+
+### A. Two Independent Pools
+`[Tags:Value]` means something different depending on where it's declared — there is no single "Tags" namespace:
+- **Trigger tags**: declared on a `[RivalAI Trigger]`/`[MES AI Trigger]` profile (`TriggerProfile.Tags`).
+- **Event tags**: declared on a `[MES Event]` profile (`EventProfile.Tags`).
+
+A tag declared on a Trigger **never** matches anything in the Event system, and vice versa, even with identical spelling — confirmed separate `List<string>` fields on separate classes, checked by separate consumer code paths. Matching everywhere is exact, ordinal (**case-sensitive**) `List<string>.Contains()` — never fuzzy, never logged on a zero-match (a tag broadcast that matches nothing fails completely silently).
+
+### B. Tag-Consuming Fields
+
+| Tag | Master Gate | Matches Pool | Declared On | Token-Resolves |
+| :--- | :--- | :--- | :--- | :--- |
+| `[ManuallyActivatedTriggerTags:]` (+ SubtypeId sibling `[ManuallyActivatedTriggerNames:]`) | `[ManuallyActivateTrigger:true]` | Trigger | `[RivalAI Action]`/`[MES AI Action]` only | Yes |
+| `[EnableTriggerTags:]` (+ `[EnableTriggerNames:]`, alias `[EnableTriggerIds:]`) | `[EnableTriggers:true]` | Trigger | `[RivalAI Action]`/`[MES AI Action]` only | Yes |
+| `[DisableTriggerTags:]` (+ `[DisableTriggerNames:]`, alias `[DisableTriggerIds:]`) | `[DisableTriggers:true]` | Trigger | `[RivalAI Action]`/`[MES AI Action]` only | Yes |
+| `[ResetTriggerCooldownTags:]` (+ `[ResetTriggerCooldownNames:]`) | `[ResetCooldownTimeOfTriggers:true]` | Trigger | `[RivalAI Action]`/`[MES AI Action]` only | Yes |
+| `[ActivateEventTags:]` (+ `[ActivateEventIds:]`) | `[ActivateEvent:true]` | Event | `[RivalAI Action]`/`[MES AI Action]` only (no Event-side equivalent) | Yes |
+| `[ToggleEventTags:]` (+ `[ToggleEventIds:]`) | `[ToggleEvents:true]` | Event | **Both** `[RivalAI Action]`/`[MES AI Action]` **and** `[MES Event Action]` | **Only from the RivalAI/MES AI Action side** — see §C |
+| `[ResetEventCooldownTags:]` (+ `[ResetEventCooldownIds:]`) | `[ResetCooldownTimeOfEvents:true]` | Event | **Both** `[RivalAI Action]`/`[MES AI Action]` **and** `[MES Event Action]` | **Only from the RivalAI/MES AI Action side** — see §C |
+| `[IncreaseRunCountEventTags:]` (+ `[IncreaseRunCountEventIds:]`) | `[IncreaseRunCountOfEvents:true]` | Event | `[MES Event Action]` only (no RivalAI-side equivalent) | No |
+
+`Enable`/`DisableTriggerNames` and their `...Ids` alias tags write to the exact same underlying list — confirmed both keys route to the same field in the tag-parse dictionary. Use whichever spelling; they are not different tags.
+
+### C. [HARD] The `ToggleEventTags` / `ResetEventCooldownTags` Dual-Context Trap
+`[ToggleEventTags:]`, `[ToggleEventIds:]`, `[ResetEventCooldownTags:]`, and `[ResetEventCooldownIds:]` are declared on **two separate C# classes** that happen to share the same field names: `ActionReferenceProfile.cs` (RivalAI/MES AI Action, processed by `ActionSystem.cs` with live `NpcData`) and `EventActionReference.cs` (MES Event Action, processed by `EventActionExecution.cs` with `npcData = null`). Same tag, same master gate, same behavior — except tokens only resolve on the RivalAI/MES AI Action side; the exact same field used inside an `[MES Event Action]` never resolves a token, since `EventActionExecution.cs` calls the shared toggle/reset methods directly with the raw, unresolved list. If a token isn't resolving where you expect it to, check which profile type the field is actually declared on.
+
+`[Waypoint:Value]` (paired with `[UseWaypoint:true]`) on a Spawner has the identical trap for a different reason: it's declared on the shared `SpawnProfile` class, usable from a Spawner on either `[Spawner:]` (RivalAI) or `[SpawnData:]` (MES Event) — both route through `BehaviorSpawnHelper.BehaviorSpawnRequest`. The RivalAI path sets `spawner.ParentBehavior` before calling it; the Event path never sets it, so it stays `null`, and the token-resolving call (`IdsReplacer.ReplaceId(_currentSpawn.ParentBehavior?.CurrentGrid?.Npc ?? null, ...)`) falls to the null-npcData branch — only sandbox variables resolve there.
+
+### D. [HARD] Grid-Scoped, Not Global — the TriggerGroups Overhead Trade-off
+Every tag-consuming field above searches only the **current grid's own, already-loaded** Trigger/Event lists — there is no global registry the way `EventManager.EventsList` is for Events generally. `ManuallyActivatedTriggerTags` searches that grid's `Triggers` + `CompromisedTriggers`; `Enable`/`Disable`/`ResetTriggerCooldownTags` search all four (`Triggers`, `DamageTriggers`, `CommandTriggers`, `CompromisedTriggers`) via `TriggerSystem.ToggleTagTriggers()`. All four lists are populated exclusively by that grid's own Behavior parsing `[Triggers:]`/`[TriggerGroups:]` at load. A Trigger never attached to this specific grid's Behavior is simply out of scope, permanently, for that grid.
+
+Consequence: a "universal" Action meant to tag-broadcast across many faction/encounter-type Trigger variants (via `{Faction}`/`{<CustomStringKey>}` tokens in the tag value) still requires **every** variant to be individually attached to any Behavior that might need it — almost always via one `[TriggerGroups:Value]` bundling all of them, since `[TriggerGroups:]` just calls `AddTrigger()` once per contained Trigger onto every grid that loads it (no lazy/deferred loading). The tag system removes the need to write N separate broadcasts (one shared, tokenized line instead); it does not remove the need for N Trigger variants to exist and be loaded.
+
+This is not a meaningful runtime cost even for a large bundle: `TriggerSystem.ProcessTriggerWatchers()` (the per-tick condition-check loop) is throttled to run at most every 500ms, and a `[Type:Manual]` Trigger — what every tag-broadcast target should be — has no matching case in that function's per-type branch chain, so an idle one costs a handful of skipped string comparisons twice a second and nothing else. The real cost is file/authoring bulk and a one-time per-grid deserialization at spawn proportional to bundle size, not an ongoing tick-rate problem.
 

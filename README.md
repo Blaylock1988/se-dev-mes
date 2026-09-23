@@ -18,29 +18,26 @@ To ensure complete accuracy and eliminate the guesswork that often plagues Space
 
 ---
 
-## Why Use `se-dev-mes`?
+## What `se-dev-mes` Gives You
 
-The Space Engineers AI modding community has produced notable reference skills, such as Godimas101's [`se-claude-skill`](https://github.com/Godimas101/se-claude-skill) (`se-frameworks/references/mes.md`), which did excellent pioneering work in establishing framework references for AI coding assistants.
-
-**`se-dev-mes`** builds upon and elevates that foundation:
-
-1. **Codebase Precedence Principle**:
-   - Online wikis and guides are notoriously outdated, contain errors, or describe legacy workarounds. Nothing takes precedence over the MES C# codebase.
-   - Every rule is classified as **`[HARD]`** (code-verified against local C# source and Keen binaries) or **`[SOFT]`** (field-tested operational heuristics).
-   - Documents specific C# source line numbers for engine bugs (e.g. `ActionSystem.cs:2412` index bug, `TriggerChecks.cs:77` `CargoShipWaypoints` out-of-bounds crash).
-2. **Automated Staleness Detection & 1-Step Updates**:
-   - Includes `check_mes_sync.py` to detect when the local MES install updates.
-   - Includes `Update-MesSkill.ps1` for a 1-step workflow that updates the 1,600+ tag cache, tests examples, and syncs across environments.
+1. **Code-Verified Accuracy, Not Guesswork**:
+   - Online wikis and guides can be outdated, incomplete, or describe legacy workarounds. Nothing takes precedence over the MES C# codebase itself.
+   - Every rule is classified as **`[HARD]`** (code-verified against local C# source and Keen binaries) or **`[SOFT]`** (field-tested operational heuristic), so you always know how much to trust it.
+   - Known engine bugs are documented down to the exact source line (e.g. `ActionSystem.cs:2412` index bug, `TriggerChecks.cs:77` `CargoShipWaypoints` out-of-bounds crash).
+2. **Automated Staleness Detection**:
+   - `check_mes_sync.py` compares the skill's offline tag cache against your local MES install, so you know right away if the skill's knowledge has drifted from the version you're actually running.
 3. **Token Optimization & Progressive Disclosure for AI Agents**:
    - Lean root `SKILL.md` keeps AI agent token usage minimal while providing high-density mental models.
    - 9 dedicated reference documents in `references/` are loaded on-demand only when relevant.
 4. **Safe XML Tooling (Eliminating Deserializer Crashes)**:
-   - Several existing guides include standard XML comments (`<!-- ... -->`) inside `<Description>` tags. In Space Engineers, Keen's `ReadElementString()` fails on comments, throwing `System.Xml.XmlException` and causing the game to skip loading the mod entirely (`MOD_CRITICAL_ERROR`).
-   - `se-dev-mes` provides `Format-MesSbc.ps1` and `Add-MesProfileSnippet.ps1` to protect `<Description>` tags and auto-convert comments to RivalAI `[//Comment]` syntax.
+   - Standard XML comments (`<!-- ... -->`) inside `<Description>` tags crash Keen's deserializer: `ReadElementString()` throws `System.Xml.XmlException`, causing the game to skip loading the mod entirely (`MOD_CRITICAL_ERROR`).
+   - `Format-MesSbc.ps1` and `Add-MesProfileSnippet.ps1` protect `<Description>` tags and auto-convert comments to RivalAI's `[//Comment]` syntax.
 5. **Real-World Production Architectures**:
    - Incorporates real-world patterns from Enenra's `mes-shared-behaviors` (Role vs. CombatType state machines), `GFA - MES Utilities` (courier logistics networks), Mike Dude's `GVK_Derelicts` (planetary convoys & store automation), and `Trade Operators Coalition` (safezone stations).
 6. **9 Production Scaffolding Patterns**:
    - `New-MesProfile.ps1` generates full boilerplate encounters, from defended wrecks and convoy escorts to boss encounters, combat drones, and reinforcement networks.
+7. **Automated Auditing for Silent-Failure Bugs**:
+   - Catches missing master gates, mismatched tag-list counts, dangling profile references, and deserializer traps before they ship to your server - the kind of bugs MES fails on silently, with no error logged.
 
 ---
 
@@ -74,7 +71,7 @@ se-dev-mes/
     ├── wc_shootmode.py                     # List/set the WeaponCore shoot mode in prefabs; classify fixed guns vs turrets
     ├── PB_TurnTest.cs                      # Programmable Block script: flight-path turn vs nose turn
     ├── check_mes_sync.py                   # Automated staleness & version drift detector
-    ├── Update-MesSkill.ps1                 # 1-step updater (rebuilds cache, runs tests, syncs global)
+    ├── Update-MesSkill.ps1                 # Maintainer-only: 1-step release updater (rebuilds cache, runs tests, syncs global)
     ├── Format-MesSbc.ps1                   # Safe XML formatter protecting <Description> & comments
     ├── Add-MesProfileSnippet.ps1           # Safe profile snippet injector for SBC files
     ├── audit_sbc.ps1                       # SBC XML deserialization auditor
@@ -130,25 +127,19 @@ Compares the offline tag cache against the local MES source code to detect updat
 python scripts/check_mes_sync.py
 ```
 
-### 3. One-Step Skill Updater (`Update-MesSkill.ps1`)
-Runs when MES is updated by maintainers to keep the skill 100% current:
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/Update-MesSkill.ps1
-```
-
-### 4. Safe XML Formatter (`Format-MesSbc.ps1`)
+### 3. Safe XML Formatter (`Format-MesSbc.ps1`)
 Formats XML while protecting `<Description>` tags from illegal line-wrapping and converting `<!-- -->` comments into `[//]`:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/Format-MesSbc.ps1 -Path ".\Content\Data"
 ```
 
-### 5. Profile Snippet Injector (`Add-MesProfileSnippet.ps1`)
+### 4. Profile Snippet Injector (`Add-MesProfileSnippet.ps1`)
 Safely injects new `EntityComponent` profiles into existing `.sbc` files without regex corruption:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/Add-MesProfileSnippet.ps1 -TargetFile ".\Data\Triggers.sbc" -SnippetFile ".\snippets\action.xml"
 ```
 
-### 6. SBC XML Deserialization Auditor (`audit_sbc.ps1`)
+### 5. SBC XML Deserialization Auditor (`audit_sbc.ps1`)
 Checks all `.sbc` files for fatal Keen deserializer traps:
 - Duplicate `<SubtypeId>` within `<Id>` blocks.
 - Duplicate `<Id>` attributes inside `<Prefab>`.
@@ -157,7 +148,7 @@ Checks all `.sbc` files for fatal Keen deserializer traps:
 powershell -ExecutionPolicy Bypass -File scripts/audit_sbc.ps1 -Path ".\Content\Data"
 ```
 
-### 7. MES Tag & Master-Gate Linter (`audit_mes_tags.ps1`)
+### 6. MES Tag & Master-Gate Linter (`audit_mes_tags.ps1`)
 Detects runtime pitfalls:
 - Zero-stripping bug in `CustomCountersTargets` / `CustomSandboxCountersTargets`.
 - Fatal `WaypointNear` / `WaypointFar` index crashes.
@@ -168,13 +159,13 @@ Detects runtime pitfalls:
 powershell -ExecutionPolicy Bypass -File scripts/audit_mes_tags.ps1 -Path ".\Content\Data"
 ```
 
-### 8. Cross-Reference Validator (`audit_mes_references.ps1`)
+### 7. Cross-Reference Validator (`audit_mes_references.ps1`)
 Validates that every referenced trigger, action, condition, spawner, spawn group, and prefab exists across the mod files:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/audit_mes_references.ps1 -Path ".\Content\Data" -WarnOrphans -SkipPrefabs
 ```
 
-### 9. Prefab & Binary Cache Auditor (`audit_prefabs.ps1`)
+### 8. Prefab & Binary Cache Auditor (`audit_prefabs.ps1`)
 Audits `Data/Prefabs/*.sbc` for silent spawn failure modes:
 - **SubtypeId vs. File Name Mismatch**: Warns if the internal `<Prefab><Id><SubtypeId>` diverges from the file name (SpawnGroups match by internal SubtypeId, not file name).
 - **Stale `.sbcB5` Binary Caches**: Detects cached binary files that override XML edits. Pass `-CleanStaleB5` to automatically purge them.
@@ -184,7 +175,7 @@ Audits `Data/Prefabs/*.sbc` for silent spawn failure modes:
 powershell -ExecutionPolicy Bypass -File scripts/audit_prefabs.ps1 -Path ".\Data\Prefabs" -CleanStaleB5
 ```
 
-### 10. Profile Scaffolding Generator (`New-MesProfile.ps1`)
+### 9. Profile Scaffolding Generator (`New-MesProfile.ps1`)
 Generates production-ready `.sbc` files for 9 standard encounter patterns:
 ```powershell
 # 1. Defended Wreck
@@ -255,13 +246,14 @@ For non-MES domains such as 3D modeling, audio, and LCD scripting, reference sel
 - **`se-assets`**: Guide for 3D modeling (`.mwm`), Havok collision models, and audio conversions (`.xwm`)—ideal when designing custom hulls or blocks for your MES prefabs.
 - **`se-tss`**: Guide for TextSurfaceScripts (drawing custom UI on LCD screens via ModAPI).
 - **`se-frameworks` (non-MES)**: Reference guides for *Animation Engine*, *Mod Adjuster*, *Scope Framework*, and *Tank Tracks*.
-- *(Note: `se-dev-mes` explicitly supersedes and replaces Godimas101's `se-frameworks/references/mes.md`)*.
 
 ---
 
 ## Versioning & Release Policy
 
 This project strictly adheres to **Semantic Versioning (`MAJOR.MINOR.PATCH`)**. For full details on when releases qualify for Patch, Minor, or Major bumps, see [VERSIONING.md](VERSIONING.md).
+
+If you're maintaining your own fork or cutting a release, `scripts/Update-MesSkill.ps1` runs the full pre-flight workflow (rebuilds the tag cache, runs the audit suite against `examples/`, and syncs the repo to your global skill directory) - see `VERSIONING.md` for the full release checklist. It's not something you need to run as a skill user.
 
 ---
 

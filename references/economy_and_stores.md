@@ -148,3 +148,16 @@ flowchart TD
    - When a mod updates an icon path or adds a new store prefab, clients frequently retain stale null references from their cached `.sbcB5` file.
    - **Resolution**: Clients must clear their `.sbcB5` cache, or the mod author must update the mod version/timestamp to force cache regeneration.
 
+---
+
+## 4. NPC Faction Credits (`[ChangeNpcFactionCredits:true]`) [HARD]
+The action is wired to the wrong fields (`ActionSystem.cs`, `ChangeNpcFactionCredits` block):
+- **The amount comes from `[ChangePlayerCreditsAmount:]`**, not `[ChangeNpcFactionCreditsAmount:]`; the NPC-specific tag is parsed and never read. A counter override uses `[ChangePlayerCreditsAmountCounter:{CounterName}]`.
+  ```xml
+  [ChangeNpcFactionCredits:true]
+  [ChangeNpcFactionCreditsTag:GRAY]
+  [ChangePlayerCreditsAmount:50000000]
+  ```
+  Leave `[ChangeNpcFactionCreditsTag:]` blank for the NPC's own faction.
+- Because the amount field is shared, one action cannot pay the player and the faction different amounts. Don't add `[ChangePlayerCredits:true]` unless the player should be paid too.
+- **Negative amounts never fail (players too)**: the insufficient-funds check in all three credit blocks (`ChangePlayerCredits` player loop, saved-player branch, `ChangeNpcFactionCredits`) is `amount > credits`, which is always false for a negative amount. A charge larger than the balance is always attempted and `PaymentSuccess` fires; `PaymentFailure` never fires for a debit. Don't rely on `[Type:PaymentFailure]` triggers to gate paid services.

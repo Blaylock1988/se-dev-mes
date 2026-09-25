@@ -10,7 +10,7 @@
     5. Missing activation flags ([UseTrigger:true], [UseSpawn:true], [UseChat:true], [UseEvent:true], [UseConditions:true]).
     6. Conflicting Autopilot flags (FlyLevelWithGravity + UseSurfaceHoverThrustMode).
     7. Boolean formatting errors (True, TRUE, 1 instead of true).
-    8. RivalAI vs MES Event Action tag mismatches ([Spawner:] vs [SpawnData:], [Chat:] vs [ChatData:]).
+    8. RivalAI vs MES Event Action tag mismatches ([Spawner:] vs [SpawnData:]; [Chat:] is not a tag - both use [ChatData:]).
     9. ContainerType master gates and list count mismatches in [MES Manipulation].
     10. ContainerType master gates and list count mismatches in [RivalAI Action].
     11. Missing boolean master gates and list count mismatches in [MES Event Action].
@@ -281,13 +281,13 @@ foreach ($file in $files) {
         }
 
         # Check 11: MES Event Action Master Gates & Lists
-        if ($block -match '\[MES Event Action\]') {
+        if ($block -match '\[MES Event Action( Template)?\]') {
             if ($block -match '\[Spawner:') {
                 Write-Host "[ERROR] $($file.Name) - [Spawner:] tag does not work in MES Event Actions! Use [SpawnData:] instead." -ForegroundColor Red
                 $issuesFound++
             }
             if ($block -match '\[Chat:') {
-                Write-Host "[ERROR] $($file.Name) - [Chat:] tag does not work in MES Event Actions! Use [ChatData:] instead." -ForegroundColor Red
+                Write-Host "[ERROR] $($file.Name) - [Chat:] is not an MES tag! Use [UseChatBroadcast:true] + [ChatData:] (same tag in RivalAI and Event actions)." -ForegroundColor Red
                 $issuesFound++
             }
             # {SpawnGroupName} never resolves in MES Events (npcData is null, and MES has
@@ -337,6 +337,23 @@ foreach ($file in $files) {
                 Write-Host "[ERROR] $($file.Name) - Zone modification tags specified in [MES Event Action] without required [ChangeZoneByName:true] master gate!" -ForegroundColor Red
                 $issuesFound++
             }
+            if ($block -match '\[SandboxStrings:' -and $block -notmatch '\[SetSandboxStrings:true\]') {
+                Write-Host "[ERROR] $($file.Name) - [SandboxStrings:] specified in [MES Event Action] without required [SetSandboxStrings:true] master gate!" -ForegroundColor Red
+                $issuesFound++
+            }
+            # EventActionExecution.cs: an empty name or value hits 'return' inside the loop and aborts every later step of the action.
+            if ($block -match '\[SandboxStrings:\s*(,|[^,\]]*,\s*\])') {
+                Write-Host "[ERROR] $($file.Name) - [SandboxStrings:] entry with an empty name or value aborts the rest of this [MES Event Action] (return inside the loop)!" -ForegroundColor Red
+                $issuesFound++
+            }
+            if ($block -match '\[SandboxVector3Ds:' -and $block -notmatch '\[SetSandboxVector3Ds:true\]') {
+                Write-Host "[ERROR] $($file.Name) - [SandboxVector3Ds:] specified in [MES Event Action] without required [SetSandboxVector3Ds:true] master gate!" -ForegroundColor Red
+                $issuesFound++
+            }
+            if ($block -match '\[InstanceEventGroup(Id|ReplaceKeys|ReplaceValues):' -and $block -notmatch '\[AddInstanceEventGroup:true\]') {
+                Write-Host "[ERROR] $($file.Name) - InstanceEventGroup tags specified in [MES Event Action] without required [AddInstanceEventGroup:true] master gate!" -ForegroundColor Red
+                $issuesFound++
+            }
             if ($block -match '\[ToggleEvent(Ids|IdModes|Tags|TagModes):' -and $block -notmatch '\[ToggleEvents:true\]') {
                 Write-Host "[ERROR] $($file.Name) - ToggleEvent tags specified in [MES Event Action] without required [ToggleEvents:true] master gate!" -ForegroundColor Red
                 $issuesFound++
@@ -376,7 +393,7 @@ foreach ($file in $files) {
         }
 
         # Check 12: MES Event Condition Master Gates & Lists
-        if ($block -match '\[MES Event Condition\]') {
+        if ($block -match '\[MES Event Condition( Template)?\]') {
             if ($block -match '\[CustomCounters:' -and $block -notmatch '\[CheckCustomCounters:true\]') {
                 Write-Host "[ERROR] $($file.Name) - [CustomCounters:] specified in [MES Event Condition] without [CheckCustomCounters:true] master gate!" -ForegroundColor Red
                 $issuesFound++

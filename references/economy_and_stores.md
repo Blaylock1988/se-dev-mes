@@ -6,29 +6,39 @@ Comprehensive reference covering Space Engineers economy stores, prefab grid sal
 
 ## 1. The 3-Part Grid Sales Registration Chain
 
-In Space Engineers, selling modded prefab ships or rovers at NPC economy store blocks requires a strict 3-part registration across vanilla SBC and MES profiles:
+In Space Engineers, selling modded prefab ships or rovers at NPC economy store blocks requires a strict 3-part registration across an MES store-items XML file, vanilla SBC and an MES profile:
 
 ```mermaid
 flowchart TD
-    A["1. Vanilla StoreItem Definition<br/><code>&lt;TypeId&gt;MyObjectBuilder_StoreItemDefinition&lt;/TypeId&gt;</code><br/><code>&lt;ItemType&gt;Prefab&lt;/ItemType&gt;</code>"] --> B["2. FactionTypes_Economy.sbc Registration<br/><code>&lt;FactionType&gt;</code> Subtype 'Builder'<br/><code>&lt;GridsForSale&gt;&lt;PrefabSubtypeId&gt;...&lt;/GridsForSale&gt;</code>"]
-    B --> C["3. MES Store Profile<br/><code>[MES Store]</code><br/><code>[StoreItems:ModPrefix-StoreItem-Name]</code>"]
+    A["1. MES Store Items file<br/><code>Data\StoreItems\ModPrefix-StoreItems.xml</code><br/><code>&lt;ItemType&gt;Prefab&lt;/ItemType&gt;</code>"] --> B["2. FactionTypes_Economy.sbc Registration<br/><code>&lt;FactionType&gt;</code> Subtype 'Builder'<br/><code>&lt;GridsForSale&gt;&lt;PrefabSubtypeId&gt;...&lt;/GridsForSale&gt;</code>"]
+    B --> C["3. MES Store Profile<br/><code>[MES Store]</code><br/><code>[FileSource:ModPrefix-StoreItems.xml]</code><br/><code>[RequiredOffers:StoreItemId]</code>"]
 ```
 
-### Part 1: Vanilla StoreItem Definition
+### Part 1: MES Store Items File (`Data\StoreItems\*.xml`)
+**[HARD]** MES reads store items from its own XML format, not from vanilla `StoreItemDefinition`s: `ProfileManager.GetStoreItemContainer()` loads `Data\StoreItems\<FileSource>` from any loaded mod and deserializes a `StoreItemsContainer`. For a grid, `ItemType` is `Prefab` and `ItemSubtypeId` is the prefab SubtypeId.
+
 ```xml
-<StoreItems>
-  <StoreItem>
-    <Id>
-      <TypeId>MyObjectBuilder_StoreItemDefinition</TypeId>
-      <SubtypeId>ModPrefix-StoreItem-HeavyCruiser</SubtypeId>
-    </Id>
-    <ItemType>Prefab</ItemType>
-    <ItemPrefabName>ModPrefix-Prefab-HeavyCruiser</ItemPrefabName>
-    <PricePerUnit>15000000</PricePerUnit>
-    <Amount>1</Amount>
-  </StoreItem>
-</StoreItems>
+<?xml version="1.0"?>
+<StoreItemsContainer xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <StoreItems>
+    <StoreItem>
+      <StoreItemId>HeavyCruiser</StoreItemId>
+      <ItemType>Prefab</ItemType>
+      <ItemSubtypeId>ModPrefix-Prefab-HeavyCruiser</ItemSubtypeId>
+      <Offer>
+        <CustomPrice>15000000</CustomPrice>
+        <MinPriceMultiplier>100</MinPriceMultiplier>
+        <MaxPriceMultiplier>100</MaxPriceMultiplier>
+        <MinAmount>1</MinAmount>
+        <MaxAmount>1</MaxAmount>
+      </Offer>
+    </StoreItem>
+  </StoreItems>
+</StoreItemsContainer>
 ```
+
+- `ItemType` values (`StoreProfileItemTypes`): `Ore`, `Ingot`, `Component`, `Ammo`, `Tool`, `Consumable`, `RandomCraftable`, `RandomItem`, `Oxygen`, `Hydrogen`, `Prefab`, `Seed`, `Item`, `Datapad`, `OxygenContainer`, `GasContainer`, `Gas`.
+- `StoreItemId` is the name the `[MES Store]` profile uses in `[Offers:]` / `[RequiredOffers:]` / `[Orders:]` / `[RequiredOrders:]`.
 
 ### Part 2: `FactionTypes_Economy.sbc` Registration
 > [!CAUTION]
@@ -59,10 +69,19 @@ flowchart TD
   </Id>
   <Description>
     [MES Store]
-    [StoreItems:ModPrefix-StoreItem-HeavyCruiser]
+    [FileSource:ModPrefix-StoreItems.xml]
+    [MinOfferItems:1]
+    [MaxOfferItems:1]
+    [RequiredOffers:HeavyCruiser]
   </Description>
 </EntityComponent>
 ```
+
+- `[FileSource:]`: File name under `Data\StoreItems\` (Part 1).
+- `[Offers:]` / `[Orders:]`: StoreItemIds eligible for random selection; `[RequiredOffers:]` / `[RequiredOrders:]`: always listed.
+- `[Min/MaxOfferItems:]`, `[Min/MaxOrderItems:]`: How many items the refresh rolls.
+- `[AddedItemsCombineQuantity:]`, `[AddedItemsAveragePrice:]`, `[EqualizeOffersAndOrders:]`.
+- There is no `[StoreItems:]` or `[ItemsRequireInventory:]` tag; MES ignores both.
 
 ---
 
@@ -101,7 +120,7 @@ In long-running multiplayer worlds, economy station store inventories become dep
 ### B. Icons & Tooltip Images
 - **[SOFT] PNG vs DDS**: DDS textures for prefab store previews frequently fail to load or become corrupted in the client cache. Always use **256x256 PNG** files for `<Icon>` and `<TooltipImage>`.
 - **[HARD] Keen Store Icon Bug (Topic 49223)**: Mod-added ships in economy stores have an engine bug where preview icons occasionally fail to render until the client `.sbcB5` cache is regenerated.
-### B. Store Icons & Preview Thumbnails
+### C. Store Icons & Preview Thumbnails
 
 Getting prefab thumbnails to render correctly in economy store blocks requires navigating three specific engine requirements:
 
@@ -119,7 +138,7 @@ flowchart TD
 ```
 
 1. **The Dual Declaration Requirement (Catalog List vs. Preview Pane)**:
-   - **`<StoreItem>` Definition (`StoreItems.sbc`)**: Must include `<Icon>`. This renders the icon in the store catalog list row.
+   - **`<StoreItem>` Definition (`StoreItems.sbc`)**: Must include `<Icon>` when the store uses vanilla `StoreItemDefinition`s. MES store-item XML (§1 Part 1) has no icon field, so for MES-stocked grids the prefab's own icons below are what render.
    - **`<Prefab>` Definition (`Prefabs.sbc`)**: Must include **both** `<Icon>` and `<TooltipImage>`.
    - **[HARD] The Missing Preview Bug**: Keen's store block UI queries `<TooltipImage>` when a player clicks a ship to view its stats. If `<TooltipImage>` is omitted from the prefab definition, the preview pane renders completely blank/transparent.
 

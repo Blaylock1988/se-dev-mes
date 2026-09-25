@@ -17,6 +17,7 @@ import re
 import json
 import hashlib
 import argparse
+import subprocess
 from datetime import datetime, timezone
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -82,13 +83,23 @@ PROFILE_FILES = {
     'RivalAI Spawn': ['SpawnProfile.cs'],
     'RivalAI Command': ['CommandProfile.cs'],
     'RivalAI Waypoint': ['WaypointProfile.cs'],
-    'RivalAI Weapon System': ['WeaponSystemReference.cs'],
+    'RivalAI Weapons': ['WeaponSystemReference.cs'],
+    # Behavior-level tags are parsed by the behavior subclass and each subsystem, not one profile class.
+    'RivalAI Behavior': ['BehaviorManager.cs', 'CoreBehavior.cs','CargoShip.cs', 'Escort.cs', 'Fighter.cs', 'FighterPlane.cs',
+                         'HorseFighter.cs', 'Horsefly.cs', 'HorseNautical.cs', 'Hunter.cs', 'Nautical.cs',
+                         'NauticalRoutes.cs', 'Passive.cs', 'Scout.cs', 'Sniper.cs', 'Strike.cs',
+                         'AutoPilotSystem.cs', 'DamageSystem.cs', 'DespawnSystem.cs', 'EscortSystem.cs',
+                         'TargetingSystem.cs', 'TriggerSystem.cs', 'WeaponSystem.cs'],
     'MES Event Action': ['EventActionReference.cs', 'EventActionProfile.cs'],
     'MES Event Condition': ['EventConditions.cs', 'EventCondition.cs'],
     'MES Event': ['EventProfile.cs'],
-    'MES Event Group': ['EventGroupProfile.cs'],
+    'MES Event TemplateGroup': ['TemplateEventGroup.cs'],
     'MES Spawn Conditions': ['SpawnConditionsProfile.cs'],
+    'MES Spawn Conditions Group': ['SpawnConditionsGroup.cs'],
     'MES Manipulation': ['ManipulationProfile.cs'],
+    'MES Manipulation Group': ['ManipulationGroup.cs'],
+    'MES Loot Group': ['LootGroup.cs'],
+    'Modular Encounters SpawnGroup': ['ImprovedSpawnGroup.cs'],
     'MES Block Replacement': ['BlockReplacementProfile.cs'],
     'MES Dereliction': ['DerelictionProfile.cs'],
     'MES Faction Icon': ['FactionIconProfile.cs'],
@@ -176,9 +187,13 @@ def parse_tags_from_file(file_path):
             continue
 
         # Pattern 3: tag.StartsWith("[TagName:") or tag.Contains("[TagName:")
-        m_start = re.search(r'tag\.(?:StartsWith|Contains)\("\[([a-zA-Z0-9_]+):"', line)
-        if m_start:
-            tag_name = m_start.group(1)
+        # (a few parsers omit the bracket, e.g. RivalAI Spawn's Contains("SpawnGroups:"))
+        # (and BehaviorManager tests customData.Contains("[BehaviorName:Fighter]") directly)
+        # (and one parser omits the colon: StartsWith("[ContainerTypeAssignmentReference"))
+        # (and aliases share a line: Contains("[WeaponsSystem:") || Contains("[WeaponSystem:"))
+        names = (re.findall(r'\w+\.(?:StartsWith|Contains)\("\[([a-zA-Z0-9_]+)(?::|")', line)
+                 or re.findall(r'tag\.(?:StartsWith|Contains)\("([a-zA-Z0-9_]+):"', line))
+        for tag_name in names:
             tags.append((tag_name, 'custom / block parse', idx))
 
     return tags
@@ -196,6 +211,18 @@ def compute_dir_hash(path):
                 except Exception:
                     pass
     return hasher.hexdigest()[:16]
+
+def get_git_commit(path):
+    """HEAD commit of the MES clone (None for a Workshop copy), so drift can be diffed with git log."""
+    try:
+        out = subprocess.run(['git', '-C', path, 'log', '-1', '--format=%H|%cs|%s'],
+                             capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0 or '|' not in out.stdout:
+        return None
+    sha, date, subject = out.stdout.strip().split('|', 2)
+    return {'sha': sha, 'date': date, 'subject': subject}
 
 def build_cache(mes_path):
     print(f"Scanning MES source at: {mes_path}")
@@ -219,11 +246,22 @@ def build_cache(mes_path):
                     'line': line_no
                 })
 
+    # Trigger types are string compares (trigger.Type == "Timer"), not an enum, so collect them here.
+    trigger_types = set()
+    trigger_dir = os.path.join(mes_path, 'Behavior', 'Subsystems', 'Trigger')
+    for root, _, files in os.walk(trigger_dir):
+        for f in files:
+            if f.endswith('.cs'):
+                with open(os.path.join(root, f), 'r', encoding='utf-8', errors='ignore') as fp:
+                    trigger_types |= set(re.findall(r'\bType == "([A-Za-z]+)"', fp.read()))
+
     cache_data = {
+        'values': {'RivalAI Trigger.Type': sorted(trigger_types)},
         'metadata': {
             'generated_at': datetime.now(timezone.utc).isoformat(),
             'mes_path': mes_path,
             'source_hash': compute_dir_hash(mes_path),
+            'git_commit': get_git_commit(mes_path),
             'total_tags': len(all_tags),
             'total_profiles': len(file_map)
         },

@@ -65,7 +65,7 @@ se-dev-mes/
 │   ├── automated_economy_store.sbc         # Mike Dude GVK automated store inventory refresh loop
 │   └── merchant_safezone_station.sbc       # TOC safezone station ([CreateSafeZone:true]) + merchant
 └── scripts/                                # Automation, diagnostics, and scaffolding suite
-    ├── mes_tag_cache.json                  # Offline database of 1,600+ tags across 32 profiles
+    ├── mes_tag_cache.json                  # Offline database of 1,842 tags across 41 profile types + trigger Type values
     ├── query_mes_tags.py                   # Tag inspector CLI (search local MES source or cache)
     ├── audit_unknown_tags.py               # Finds tags MES silently ignores (checked against the tag cache)
     ├── wc_shootmode.py                     # List/set the WeaponCore shoot mode in prefabs; classify fixed guns vs turrets

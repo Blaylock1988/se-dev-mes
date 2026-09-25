@@ -31,9 +31,8 @@ A spawn group definition combines vanilla Keen tags with MES description tags:
     <SubtypeId>ModPrefix-SpawnGroup-EncounterName</SubtypeId>
   </Id>
   <Description>
-    [MES Spawn Group]
+    [Modular Encounters SpawnGroup]
     [SpawnConditionsProfiles:ModPrefix-SpawnCondition-EncounterName]
-    [DerelictionProfiles:ModPrefix-Dereliction-EncounterName]
     [ManipulationProfiles:ModPrefix-Manipulation-EncounterName]
   </Description>
   <IsPirate>true</IsPirate>
@@ -49,10 +48,12 @@ A spawn group definition combines vanilla Keen tags with MES description tags:
 ```
 
 ### Critical Spawn Group Tags:
+- **[HARD] `[Modular Encounters SpawnGroup]` header**: `SpawnGroupManager.cs:647` only builds an MES spawn group when the Description contains this exact string. Any other header (e.g. `[MES Spawn Group]`) leaves it a plain vanilla spawn group: every MES tag in it is ignored, with no error.
 - `<Frequency>`: Relative weight among eligible groups in the same pool. Higher frequency increases spawn probability relative to other groups.
 - `[SpawnConditionsProfiles:]`: Reference to one or more `[MES Spawn Conditions]` profiles.
-- `[DerelictionProfiles:]`: Reference to dereliction profiles applying damaged block rendering.
-- `[ManipulationProfiles:]`: Reference to block replacement, inventory, and weapon randomizer rules.
+- `[ManipulationProfiles:]` / `[ManipulationGroups:]`: Reference to `[MES Manipulation]` profiles (block replacement, weapon randomizer, dereliction via `[UseGridDereliction:true]` + `[DerelictionProfiles:]`, inventory, recolor).
+- `[ReplenishSystems:bool]` + `[ReplenishProfiles:]`: Spawn-group-level ammo/fuel top-up (§5 of `manipulation_and_dereliction.md`).
+- **Inline profiles**: `ImprovedSpawnGroup.InitTags()` also parses the spawn group's own Description as its first Spawn Conditions profile and first Manipulation profile, so condition/manipulation tags written directly in the spawn group are honored.
 
 ---
 
@@ -66,12 +67,12 @@ Declared in an `Inventory` EntityComponent definition.
 - `[PlanetaryCargoShip:bool]`: Enables spawning in planetary cargo pools.
 - `[SpaceRandomEncounter:bool]`: Enables static space encounters.
 - `[PlanetaryInstallation:bool]`: Enables planetary base/station spawns.
-- `[RivalAiAnySpawn:bool]`: Master switch for custom RivalAI drone/event spawns.
-- `[RivalAiSpaceSpawn:bool]` / `[RivalAiPlanetSpawn:bool]`: Environment gates for custom spawns.
+- `[RivalAiSpawn:bool]` / `[RivalAiAnySpawn:bool]` / `[RivalAiSpaceSpawn:bool]` / `[RivalAiAtmosphericSpawn:bool]`: Make the group eligible for RivalAI `[RivalAI Spawn]` / event spawns (`SpawnConditions.cs:174` accepts any of the four).
 
 ### B. Planetary Altitude & Placement
-- `[MinAltitude:<double>]` & `[MaxAltitude:<double>]`: Altitude range relative to terrain surface.
-- `[MinPlanetSurfaceAltitude:<double>]`: Absolute distance from sea level.
+- `[MinSpawnFromPlanetSurface:<double>]` & `[MaxSpawnFromPlanetSurface:<double>]`: Altitude window (meters above surface) at the spawn position; `-1` (default) disables each bound (`SpawnConditions.DistanceFromSurfaceCheck`). `[MinAltitude:]`/`[MaxAltitude:]` are `[RivalAI Spawn]` tags and are ignored here.
+- `[AlignToSurface:bool]` *(MES 2.74.02)*: Planetary installations align to the terrain surface instead of the default gravity-up orientation.
+- Water Mod installations: `[InstallationSpawnsOnWaterSurface:bool]` / `[InstallationSpawnsUnderwater:bool]` with `[MinWaterDepth:<double>]` / `[MaxWaterDepth:<double>]` *(MaxWaterDepth added in 2.74.03)*. **[HARD]** The placement check rejects any depth outside `[Min, Max]` (`PathPlacements.cs:836-845`) and `MaxWaterDepth` defaults to `0`, so always set it for water-surface or underwater stations.
 - `[CutVoxelsAtAirtightCells:true]`: **[HARD]** Cuts terrain meshes only around airtight cells of subterranean stations.
 - `[CutVoxelSize:<double>]`: Voxel cut buffer size in meters (e.g. `2.5`).
   > [!WARNING]
@@ -81,14 +82,16 @@ Declared in an `Inventory` EntityComponent definition.
 MES evaluates player threat score based on block count, weapons, and grid mass in range:
 - `[UseThreatLevelCheck:true]`
 - `[ThreatScoreMinimum:<int>]` & `[ThreatScoreMaximum:<int>]`
-- `[ThreatScoreDistance:<double>]`: Radius around spawn point to calculate player threat (default: 5000m).
-- `[ThreatScoreGridConfiguration:All]` (or `Static`, `Large`, `Small`).
+- `[ThreatLevelCheckRange:<double>]`: Radius around spawn point to calculate player threat (default: 5000m).
+- `[ThreatScoreGridConfiguration:All]` (or `Static`, `Dynamic`).
+- `[ThreatIncludeOtherNpcOwners:bool]`, `[ThreatScorePlanetaryHandicap:<float>]`.
 
 ### D. Weather, Day/Night & Sandbox Variables
-- `[WeatherRequired:true]` + `[AllowedWeatherSystems:Fog,Dust,Sandstorm]`: Requires active planet weather.
-- `[RequireDay:true]` / `[RequireNight:true]`: Solar angle gates.
-- `[UseSandboxBooleans:true]` + `[TrueBooleans:...]` / `[FalseBooleans:...]`.
-- `[UseSandboxCounters:true]` + `[SandboxCounters:...]` + `[SandboxCountersTargets:...]` + `[SandboxCounterCompareTypes:...]`.
+- `[UseWeatherSpawning:true]` + `[AllowedWeatherSystems:Fog,Dust,Sandstorm]`: Requires active planet weather.
+- `[UseDayOrNightOnly:true]` + `[SpawnOnlyAtNight:bool]`: Day/night gate (`false` = day only).
+- `[SandboxVariables:...]` / `[FalseSandboxVariables:...]`: Sandbox booleans that must be true / false. `{SpawnGroupName}` resolves in both *(MES 2.74.00)*.
+- `[CheckCustomSandboxCounters:true]` + `[CustomSandboxCounters:...]` + `[CustomSandboxCountersTargets:...]` + `[SandboxCounterCompareTypes:...]` (targets list is zero-stripped — see `events_and_zones.md` §3).
+- `[UseRandomCustomFaction:bool]` *(MES 2.74.00)*: Completes the random-faction set alongside the existing faction randomizers.
 
 ---
 
@@ -106,7 +109,7 @@ Used inside Action profiles (`[Spawner:<SubtypeId>]`) to deploy escorts, defense
     [RivalAI Spawn]
     [UseSpawn:true]
     [SpawningType:CustomSpawn]
-    [StartsReady:true]
+    [FirstSpawnTimeMs:0]
     [SpawnGroups:ModPrefix-SpawnGroup-DefenseDrone]
     [MinDistance:150]
     [MaxDistance:300]
@@ -121,6 +124,7 @@ Used inside Action profiles (`[Spawner:<SubtypeId>]`) to deploy escorts, defense
 - `[SpawningType:CustomSpawn]`: Spawns relative to parent grid.
 - `[MinDistance:<double>]` & `[MaxDistance:<double>]`: Radial distance from parent.
 - `[InheritNpcAltitude:bool]`: Aligns drone altitude to parent grid's altitude.
+- `[FirstSpawnTimeMs:<int>]`, `[SpawnMinCooldown:<int>]` / `[SpawnMaxCooldown:<int>]`, `[MaxSpawns:<int>]`: Timing and cap. `[RivalAI Spawn]` has no `[StartsReady:]` tag (that is a Trigger/Chat/Event tag); it is silently ignored here.
 
 ---
 
@@ -196,9 +200,9 @@ if (validFactionsList.Count == 0 && collection.OwnerOverride < 0) {
 
 ### C. Points of Failure & Where Typos Occur
 1. **`[FactionOwner:<Tag>]` in `[MES Spawn Conditions]`**: Default is `SPRT`. A typo here (e.g. `SPTR`) breaks all spawn conditions referencing the tag.
-2. **`[FactionOverride:<Tag>]` in `[MES Spawn Group]`**: Overrides `FactionOwner`. A typo here breaks the entire spawn group.
-3. **`[AllowedZoneFactions:<Tag>]` in `[Zone]`**: In `SpawnConditions.cs:2093`, if the resolved faction is not in the zone whitelist, spawning fails with:
-   `"Zone Check Failed: Faction '<tag>' is not among Allowed Zone Factions."`
+2. **`[FactionOverride:<Tag>]` in the `[Modular Encounters SpawnGroup]` Description**: Overrides `FactionOwner`. A typo here breaks the entire spawn group.
+3. **`[UseAllowedFactions:true]` + `[AllowedFactions:<Tag>]` in `[MES Zone]`** *(MES 2.74.00)*: In `SpawnConditions.cs:2096`, if the resolved faction is not in the zone whitelist, spawning fails with:
+   `"Zone Check Failed: Faction '<tag>' is not among Allowed Zone Factions."` (`[UseRestrictedFactions:true]` + `[RestrictedFactions:]` is the blacklist twin, line 2120.)
 4. **`[SpawnFactionTags:<Tag>]` in `[MES Event Action]`**: Used with `[SpawnEncounter:true]`.
 5. **Missing Mod in World Save**: If a mod defining custom factions in `Factions.sbc` is omitted from the world save, or if `Factions.sbc` had XML syntax errors preventing it from loading, Space Engineers never registers the faction in `Session.Factions`, silently disabling all spawns for that faction.
 

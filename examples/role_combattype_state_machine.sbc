@@ -56,8 +56,8 @@
         [StrafeMinDurationMs:3000]
         [StrafeMaxDurationMs:6000]
         [UseProjectileLeadPrediction:true]
-        [StrikeBeginPlanetAttackRunDistance:600]
-        [StrikeBreakawayDistance:100]
+        [AttackRunDistancePlanet:600]
+        [AttackRunBreakawayDistance:100]
         [BarrelRollMinDurationMs:2000]
         [BarrelRollMaxDurationMs:3000]
       </Description>
@@ -71,14 +71,15 @@
       </Id>
       <Description>
         [RivalAI Target]
-        [UsePriorities:true]
-        [TargetRules:Grid]
+        [UseCustomTargeting:true]
+        [Target:Block]
+        [BlockTargets:Guns]
+        [BlockTargets:Thrusters]
+        [GetTargetBy:ClosestDistance]
         [MaxDistance:3500]
         [MatchAllFilters:Relation]
         [MatchAllFilters:Powered]
-        [PrioritizeTargetSubsystems:true]
-        [TargetSubsystems:Weapons]
-        [TargetSubsystems:Thrust]
+        [Relations:Enemy]
       </Description>
     </EntityComponent>
 
@@ -148,7 +149,7 @@
       </Id>
       <Description>
         [RivalAI Trigger]
-        [Type:NoTargetCheck]
+        [Type:NoTarget]
         [UseTrigger:false]
         [StartsReady:false]
         [MinCooldownMs:15000]

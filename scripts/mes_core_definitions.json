@@ -1,7 +1,7 @@
 {
   "_comment": "SubtypeIds shipped natively by the Modular Encounters Systems (MES) mod itself (Workshop ID 1521905890) — RivalAI/manipulation/loot/spawn-condition profiles that ship inside MES's own Data folder, not defined by any consumer mod. Used by audit_mes_references.ps1 to avoid false-positive 'missing reference' errors when a mod (e.g. GVK_Derelicts) legitimately references a built-in MES profile such as MES-Manipulation-RivalAi.",
   "_source": "C:\\Users\\blayl\\AppData\\Roaming\\SpaceEngineers\\Mods\\Modular-Encounters-Systems\\Data",
-  "_capturedOn": "2026-09-22",
+  "_capturedOn": "2026-09-24",
   "_regenerate": "Re-run the extraction whenever MES updates: grep -rhoE '<SubtypeId>[^<]+</SubtypeId>|Subtype=\"[^\"]+\"' <MES Data folder> --include=*.sbc, strip tags/quotes, keep entries prefixed 'MES-', drop numbered debug/test prefabs (MES-Prefab-<n>-<n>, ProceduralPrefabDebug-*), sort -u.",
   "definitions": [
     "MES-Action-DummyDespawn",

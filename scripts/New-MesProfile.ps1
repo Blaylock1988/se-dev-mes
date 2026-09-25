@@ -84,8 +84,9 @@ switch ($Pattern) {
         <SubtypeId>${ModPrefix}-SpawnGroup-${Name}</SubtypeId>
       </Id>
       <Description>
-        [MES Spawn Group]
+        [Modular Encounters SpawnGroup]
         [SpawnConditionsProfiles:${ModPrefix}-SpawnCondition-${Name}]
+        [UseGridDereliction:true]
         [DerelictionProfiles:${ModPrefix}-Dereliction-${Name}]
       </Description>
       <IsPirate>true</IsPirate>
@@ -127,7 +128,9 @@ switch ($Pattern) {
         [MaxIntegrityPercentage:65]
         [MinBuildPercentage:10]
         [MaxBuildPercentage:45]
-        [ChanceBlockDamaged:40]
+        [Blocks:MyObjectBuilder_CubeBlock/LargeBlockArmorBlock]
+        [MatchOnlyTypeId:true]
+        [Chance:40]
       </Description>
     </EntityComponent>
 
@@ -181,7 +184,7 @@ switch ($Pattern) {
         [RivalAI Spawn]
         [UseSpawn:true]
         [SpawningType:CustomSpawn]
-        [StartsReady:true]
+        [FirstSpawnTimeMs:0]
         [SpawnGroups:${ModPrefix}-SpawnGroup-DefenseDrone]
         [MinDistance:100]
         [MaxDistance:300]
@@ -227,7 +230,7 @@ switch ($Pattern) {
         [StartsReady:true]
         [Author:${Faction} Automated Beacon]
         [Color:Red]
-        [Channel:Chat]
+        [BroadcastChatType:Chat]
         [ChatMessages:WARNING: Restricted airspace. Trespassers will be fired upon.]
         [BroadcastRandomly:true]
       </Description>
@@ -273,7 +276,7 @@ switch ($Pattern) {
         <SubtypeId>${ModPrefix}-SpawnGroup-Leader-${Name}</SubtypeId>
       </Id>
       <Description>
-        [MES Spawn Group]
+        [Modular Encounters SpawnGroup]
         [SpawnConditionsProfiles:${ModPrefix}-SpawnCondition-${Name}]
       </Description>
       <IsPirate>true</IsPirate>
@@ -303,8 +306,6 @@ switch ($Pattern) {
         [MES Spawn Conditions]
         [RivalAiAnySpawn:true]
         [FactionOwner:${Faction}]
-        [MinAltitude:100]
-        [MaxAltitude:500]
       </Description>
     </EntityComponent>
 
@@ -370,7 +371,6 @@ switch ($Pattern) {
         [RivalAI Command]
         [CommandCode:${ModPrefix}_ConvoyUnderAttack]
         [SingleRecipient:false]
-        [MatchCommandCode:true]
       </Description>
     </EntityComponent>
 
@@ -396,8 +396,6 @@ switch ($Pattern) {
         [RivalAI Autopilot]
         [IdealMinSpeed:25]
         [IdealMaxSpeed:50]
-        [EscortDistance:150]
-        [EscortSpeedMatch:true]
       </Description>
     </EntityComponent>
 
@@ -409,7 +407,7 @@ switch ($Pattern) {
       <Description>
         [RivalAI Trigger]
         [Type:CommandReceived]
-        [CommandCode:${ModPrefix}_ConvoyUnderAttack]
+        [CommandReceiveCode:${ModPrefix}_ConvoyUnderAttack]
         [UseTrigger:true]
         [Actions:${ModPrefix}-Action-EscortEngage-${Name}]
       </Description>
@@ -443,7 +441,7 @@ switch ($Pattern) {
       </Id>
       <Description>
         [MES Zone]
-        [ZoneName:${ModPrefix}_Zone_${Name}]
+        [Name:${ModPrefix}_Zone_${Name}]
         [PublicName:${ModPrefix} ${Name} Zone]
         [Active:true]
         [Persistent:true]
@@ -576,7 +574,10 @@ switch ($Pattern) {
       </Id>
       <Description>
         [MES Store]
-        [StoreItems:${ModPrefix}-StoreItem-${Name}]
+        [FileSource:${ModPrefix}-StoreItems-${Name}.xml]
+        [MinOfferItems:1]
+        [MaxOfferItems:1]
+        [RequiredOffers:${Name}]
       </Description>
     </EntityComponent>
   </EntityComponents>
@@ -610,7 +611,7 @@ switch ($Pattern) {
         <SubtypeId>${ModPrefix}-SpawnGroup-${Name}</SubtypeId>
       </Id>
       <Description>
-        [MES Spawn Group]
+        [Modular Encounters SpawnGroup]
         [SpawnConditionsProfiles:${ModPrefix}-SpawnCondition-${Name}]
       </Description>
       <IsPirate>true</IsPirate>
@@ -635,8 +636,6 @@ switch ($Pattern) {
         [MES Spawn Conditions]
         [RivalAiAnySpawn:true]
         [FactionOwner:${Faction}]
-        [MinAltitude:100]
-        [MaxAltitude:500]
       </Description>
     </EntityComponent>
 
@@ -697,14 +696,14 @@ switch ($Pattern) {
       </Id>
       <Description>
         [RivalAI Target]
-        [UsePriorities:true]
-        [TargetRules:Grid]
+        [UseCustomTargeting:true]
+        [Target:Block]
         [MaxDistance:4000]
         [MatchAllFilters:Relation]
+        [Relations:Enemy]
         [MatchAllFilters:Powered]
-        [PrioritizeTargetSubsystems:true]
-        [TargetSubsystems:Weapons]
-        [TargetSubsystems:Thrust]
+        [BlockTargets:Guns]
+        [BlockTargets:Thrusters]
       </Description>
     </EntityComponent>
 
@@ -718,7 +717,7 @@ switch ($Pattern) {
         [Type:Damage]
         [UseTrigger:true]
         [StartsReady:true]
-        [TriggerTags:Cruising]
+        [Tags:Cruising]
         [Actions:${ModPrefix}-Action-EnterCombat-${Name}]
       </Description>
     </EntityComponent>
@@ -734,7 +733,7 @@ switch ($Pattern) {
         [TargetDistance:2000]
         [UseTrigger:true]
         [StartsReady:true]
-        [TriggerTags:Cruising]
+        [Tags:Cruising]
         [Actions:${ModPrefix}-Action-EnterCombat-${Name}]
       </Description>
     </EntityComponent>
@@ -763,12 +762,12 @@ switch ($Pattern) {
       </Id>
       <Description>
         [RivalAI Trigger]
-        [Type:NoTargetCheck]
+        [Type:NoTarget]
         [UseTrigger:true]
         [StartsReady:false]
         [MinCooldownMs:15000]
         [MaxCooldownMs:15001]
-        [TriggerTags:InCombat]
+        [Tags:InCombat]
         [Actions:${ModPrefix}-Action-ExitCombat-${Name}]
       </Description>
     </EntityComponent>
@@ -803,7 +802,7 @@ switch ($Pattern) {
         <SubtypeId>${ModPrefix}-SpawnGroup-${Name}</SubtypeId>
       </Id>
       <Description>
-        [MES Spawn Group]
+        [Modular Encounters SpawnGroup]
         [SpawnConditionsProfiles:${ModPrefix}-SpawnCondition-${Name}]
       </Description>
       <IsPirate>true</IsPirate>
@@ -827,7 +826,7 @@ switch ($Pattern) {
       <Description>
         [MES Spawn Conditions]
         [RivalAiAnySpawn:true]
-        [RivalAiPlanetSpawn:true]
+        [RivalAiAtmosphericSpawn:true]
         [FactionOwner:${Faction}]
         [CutVoxelsAtAirtightCells:true]
         [CutVoxelSize:2.5]
@@ -855,14 +854,14 @@ switch ($Pattern) {
       </Id>
       <Description>
         [RivalAI Target]
-        [UsePriorities:true]
-        [TargetRules:Grid]
+        [UseCustomTargeting:true]
+        [Target:Block]
         [MaxDistance:4000]
         [MatchAllFilters:Relation]
+        [Relations:Enemy]
         [MatchAllFilters:Powered]
-        [PrioritizeTargetSubsystems:true]
-        [TargetSubsystems:Weapons]
-        [TargetSubsystems:Thrust]
+        [BlockTargets:Guns]
+        [BlockTargets:Thrusters]
       </Description>
     </EntityComponent>
 
@@ -902,7 +901,7 @@ switch ($Pattern) {
         [RivalAI Spawn]
         [UseSpawn:true]
         [SpawningType:CustomSpawn]
-        [StartsReady:true]
+        [FirstSpawnTimeMs:0]
         [SpawnGroups:${ModPrefix}-SpawnGroup-Guards]
         [MinDistance:150]
         [MaxDistance:300]
@@ -917,10 +916,23 @@ switch ($Pattern) {
       <Description>
         [RivalAI Trigger]
         [Type:Damage]
-        [DamageThreshold:5000]
+        [Conditions:${ModPrefix}-Condition-Distress-${Name}]
         [UseTrigger:true]
         [StartsReady:true]
         [Actions:${ModPrefix}-Action-Distress-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Condition-Distress-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Condition]
+        [UseConditions:true]
+        [CheckHealthPercentage:true]
+        [MaxPercentageOfHealthRemaining:90]
       </Description>
     </EntityComponent>
 
@@ -945,7 +957,6 @@ switch ($Pattern) {
         [RivalAI Command]
         [CommandCode:${ModPrefix}_BaseUnderAttack]
         [SingleRecipient:false]
-        [MatchCommandCode:true]
       </Description>
     </EntityComponent>
   </EntityComponents>
@@ -963,7 +974,7 @@ switch ($Pattern) {
         <SubtypeId>${ModPrefix}-SpawnGroup-${Name}</SubtypeId>
       </Id>
       <Description>
-        [MES Spawn Group]
+        [Modular Encounters SpawnGroup]
         [SpawnConditionsProfiles:${ModPrefix}-SpawnCondition-${Name}]
       </Description>
       <IsPirate>true</IsPirate>
@@ -1033,14 +1044,14 @@ switch ($Pattern) {
       </Id>
       <Description>
         [RivalAI Target]
-        [UsePriorities:true]
-        [TargetRules:Grid]
+        [UseCustomTargeting:true]
+        [Target:Block]
         [MaxDistance:4000]
         [MatchAllFilters:Relation]
+        [Relations:Enemy]
         [MatchAllFilters:Powered]
-        [PrioritizeTargetSubsystems:true]
-        [TargetSubsystems:Weapons]
-        [TargetSubsystems:Thrust]
+        [BlockTargets:Guns]
+        [BlockTargets:Thrusters]
       </Description>
     </EntityComponent>
 
@@ -1114,8 +1125,6 @@ switch ($Pattern) {
         [RivalAI Command]
         [CommandCode:${ModPrefix}_DistressSignal]
         [SingleRecipient:false]
-        [MatchCommandCode:true]
-        [SendTargetPosition:true]
       </Description>
     </EntityComponent>
 
@@ -1128,7 +1137,7 @@ switch ($Pattern) {
       <Description>
         [RivalAI Trigger]
         [Type:CommandReceived]
-        [CommandCode:${ModPrefix}_DistressSignal]
+        [CommandReceiveCode:${ModPrefix}_DistressSignal]
         [UseTrigger:true]
         [Actions:${ModPrefix}-Action-RespondDistress-${Name}]
       </Description>
@@ -1161,7 +1170,7 @@ switch ($Pattern) {
         <SubtypeId>${ModPrefix}-SpawnGroup-${Name}</SubtypeId>
       </Id>
       <Description>
-        [MES Spawn Group]
+        [Modular Encounters SpawnGroup]
         [SpawnConditionsProfiles:${ModPrefix}-SpawnCondition-${Name}]
       </Description>
       <IsPirate>true</IsPirate>
@@ -1186,8 +1195,6 @@ switch ($Pattern) {
         [MES Spawn Conditions]
         [RivalAiAnySpawn:true]
         [FactionOwner:${Faction}]
-        [MinAltitude:200]
-        [MaxAltitude:600]
       </Description>
     </EntityComponent>
 
@@ -1226,14 +1233,14 @@ switch ($Pattern) {
       </Id>
       <Description>
         [RivalAI Target]
-        [UsePriorities:true]
-        [TargetRules:Grid]
+        [UseCustomTargeting:true]
+        [Target:Block]
         [MaxDistance:5000]
         [MatchAllFilters:Relation]
+        [Relations:Enemy]
         [MatchAllFilters:Powered]
-        [PrioritizeTargetSubsystems:true]
-        [TargetSubsystems:Weapons]
-        [TargetSubsystems:Power]
+        [BlockTargets:Guns]
+        [BlockTargets:Power]
       </Description>
     </EntityComponent>
 
@@ -1277,7 +1284,7 @@ switch ($Pattern) {
         [StartsReady:true]
         [Author:${Faction} Command]
         [Color:Red]
-        [Channel:Chat]
+        [BroadcastChatType:Chat]
         [ChatMessages:Hostile target confirmed. All batteries, open fire!]
         [BroadcastRandomly:true]
       </Description>
@@ -1292,11 +1299,24 @@ switch ($Pattern) {
       <Description>
         [RivalAI Trigger]
         [Type:Damage]
-        [DamageThreshold:20000]
+        [Conditions:${ModPrefix}-Condition-Phase2-${Name}]
         [UseTrigger:true]
         [StartsReady:true]
         [MaxActions:1]
         [Actions:${ModPrefix}-Action-Phase2-${Name}]
+      </Description>
+    </EntityComponent>
+
+    <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+      <Id>
+        <TypeId>Inventory</TypeId>
+        <SubtypeId>${ModPrefix}-Condition-Phase2-${Name}</SubtypeId>
+      </Id>
+      <Description>
+        [RivalAI Condition]
+        [UseConditions:true]
+        [CheckHealthPercentage:true]
+        [MaxPercentageOfHealthRemaining:50]
       </Description>
     </EntityComponent>
 
@@ -1321,7 +1341,7 @@ switch ($Pattern) {
         [RivalAI Spawn]
         [UseSpawn:true]
         [SpawningType:CustomSpawn]
-        [StartsReady:true]
+        [FirstSpawnTimeMs:0]
         [SpawnGroups:${ModPrefix}-SpawnGroup-EscortWave]
         [MinDistance:200]
         [MaxDistance:400]

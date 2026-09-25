@@ -17,9 +17,9 @@ MES Events and RivalAI Grid Triggers use **different tag names** for sub-profile
 | Feature | RivalAI Grid Action Tag | MES Event Action Tag | Notes |
 | :--- | :--- | :--- | :--- |
 | **Encounter Spawner** | `[Spawner:ProfileId]` | `[SpawnData:ProfileId]` | Using `[Spawner:]` in an Event Action causes silent failure (`Spawner.Count == 0`). |
-| **Chat Message** | `[Chat:ProfileId]` | `[ChatData:ProfileId]` | Using `[Chat:]` in an Event Action fails to attach the chat profile. |
+| **Chat Message** | `[UseChatBroadcast:true]` + `[ChatData:ProfileId]` | `[UseChatBroadcast:true]` + `[ChatData:ProfileId]` | Same tag on both sides (`ActionProfile.cs:73`, `EventActionProfile.cs:73`). There is no `[Chat:]` tag anywhere. |
 | **Counter Changes** | `[IncreaseSandboxCounters:Name]` | `[ChangeCounters:true]` + `[IncreaseCounters:Name]` | MES Event Actions **require** `[ChangeCounters:true]` gating. |
-| **Zone Resizing** | `[ChangeZoneByName:true]` + `[ZoneName:]` + `[ZoneRadiusChangeType:]` + `[ZoneRadiusChangeAmount:]` | `[ChangeZoneByName:true]` + `[ZoneNames:]` + `[ZoneRadiusChangeTypes:]` + `[ZoneRadiusChangeAmounts:]` | RivalAI actions use **singular** tag names; MES Event Actions use **plural lists**. |
+| **Zone Resizing** | `[ChangeZoneAtPosition:true]` (grid inside the zone) or `[ChangeZoneOnlyByName:true]` (any distance, 2.74.00) + `[ZoneName:]` + `[ZoneRadiusChangeType:]` + `[ZoneRadiusChangeAmount:]` | `[ChangeZoneByName:true]` + `[ZoneNames:]` + `[ZoneRadiusChangeTypes:]` + `[ZoneRadiusChangeAmounts:]` (2.74.00) | RivalAI actions use **singular** tag names and have no `ChangeZoneByName`; MES Event Actions use **plural lists**. `ActionSystem.cs:1916` runs the RivalAI zone block only when one of the two RivalAI gates is true. |
 
 ---
 
@@ -41,6 +41,10 @@ MES Events and RivalAI Grid Triggers use **different tag names** for sub-profile
 | `[ToggleEvents:true]` | `[ToggleEventIds:]`, `[ToggleEventIdModes:]`, `[ToggleEventTags:]`, `[ToggleEventTagModes:]` | Enabling or disabling other MES Events. **[HARD]** These same four tags also exist on `[RivalAI Action]`/`[MES AI Action]` (a different C# class, `ActionReferenceProfile.cs`). On that side they token-resolve via `IdsReplacer`; here, in `[MES Event Action]`, they don't — `EventActionExecution.cs` never wraps them. Full rundown: [`references/profiles_and_tags.md`](references/profiles_and_tags.md) §6C. |
 | `[ResetCooldownTimeOfEvents:true]` | `[ResetEventCooldownIds:]`, `[ResetEventCooldownTags:]` | Forcing events back to 0 or full cooldown. Same RivalAI-vs-Event dual-declaration/token-asymmetry as `[ToggleEvents:]` above — see [`references/profiles_and_tags.md`](references/profiles_and_tags.md) §6C. |
 | `[UseChatBroadcast:true]` | `[ChatData:]`, `[UseChatOverrideAuthor:true]`, `[ChatOverrideAuthor:]`, `[UseChatOverrideMessage:true]` | Transmitting HUD / chat notifications. |
+| `[SetSandboxStrings:true]` *(2.74.00)* | `[SandboxStrings:name,value]` | Sets sandbox string variables (sandbox-var tokens resolve in name and value). **[HARD]** An entry with an empty name or value hits a `return` inside the loop (`EventActionExecution.cs:119`), which aborts **every later step of this action**, not just that entry. |
+| `[SetSandboxVector3Ds:true]` *(2.74.00)* | `[SandboxVector3Ds:name,{X:0 Y:0 Z:0}]` | Sets sandbox Vector3D variables. |
+| `[AddInstanceEventGroup:true]` | `[InstanceEventGroupId:]`, `[InstanceEventGroupReplaceKeys:]`, `[InstanceEventGroupReplaceValues:]` | Instantiates a `[MES Event TemplateGroup]` (§5). |
+| `[TryContractSuccess:true]` / `[TryContractFail:true]` | *(none)* | Finish/fail the MES mission contract whose id seeded this event instance. |
 | `[AddGPSToPlayers:true]` | `[GPSNames:]`, `[GPSDescriptions:]`, `[GPSCoords:]`, `[UseGPSObjective:true]` | Creating HUD GPS waypoints for players. |
 | `[RemoveGPSFromPlayers:true]` | `[RemoveGPSNames:]` | Deleting HUD GPS waypoints from players. |
 | *None (Self-gated)* | `[DebugChatMessage:<Text>]`, `[DebugHudMessage:<Text>]` | Diagnostic test messages for event development (never use in production). |
@@ -54,6 +58,7 @@ MES Events and RivalAI Grid Triggers use **different tag names** for sub-profile
 | `[CheckFalseBooleans:true]` | `[FalseBooleans:]`, `[AllowAnyFalseBoolean:true/false]` | Requiring sandbox booleans to be false. |
 | `[CheckPlayerNear:true]` | `[PlayerNearCoords:]`, `[PlayerNearDistanceFromCoords:]`, `[PlayerNearMinDistanceFromCoords:]` | Distance checks from specified coords. |
 | `[CheckThreatScore:true]` | `[ThreatScoreAmount:]`, `[ThreatScoreDistance:]`, `[ThreatScoreCoords:]` | Player combat grid threat checks. |
+| `[CheckOnSession:true]` *(2.74.00)* | *(none)* | Satisfied exactly once per game load (the first evaluation after load), then fails until the next load (`EventConditions.cs:541`). |
 
 ---
 
@@ -90,7 +95,7 @@ Zones define spatial volumes that enforce territory rules, modify spawn pools, a
   </Id>
   <Description>
     [MES Zone]
-    [ZoneName:ModPrefix_Zone_Alpha]
+    [Name:ModPrefix_Zone_Alpha]
     [PublicName:Contested Territory Alpha]
     [Active:true]
     [Persistent:true]
@@ -104,11 +109,22 @@ Zones define spatial volumes that enforce territory rules, modify spawn pools, a
 1. **[HARD] `[Type:InsideZone]` vs `[Type:InsideActiveZone]`**:
    - `[Type:InsideZone]` calls `ZoneManager.InsideZoneWithName(..., onlyActive: false)`. It evaluates `true` even when the target zone is deactivated!
    - Always use `[Type:InsideActiveZone]` and `[Type:OutsideActiveZone]`.
-2. **[HARD] Persistence Gate for `RestrictedSpawnGroups`**:
-   - In `ZoneManager.cs` (line 320), `zone.RestrictedSpawnGroups` is **only** populated into active zone collections if `zone.Persistent == true`.
-   - Because `Persistent` defaults to `false` in `Zone.cs`, non-persistent zones completely ignore spawn group restrictions.
-3. **[HARD] Blacklist Behavior**:
-   - `RestrictedZoneSpawnGroups` functions as an inverted **blacklist** (`if (collection.RestrictedZoneSpawnGroups.Contains(spawnGroup.SpawnGroupName)) continue;`), blocking matching groups rather than whitelisting them.
+2. **[HARD] Zone name tag is `[Name:]`**: `[ZoneName:]` is the tag *other* profiles use to refer to a zone (Triggers, Actions, Zone Conditions, Player Conditions). Inside `[MES Zone]` it is ignored, leaving the zone unnamed.
+3. **Spawn restrictions (overhauled in MES 2.74.00)** — `ZoneManager.GetAllowedSpawns()`, evaluated only for **Active** zones:
+
+   | Restriction | Tags | Applies when | Precedence |
+   | :--- | :--- | :--- | :--- |
+   | No spawns at all | `[NoSpawnZone:true]` | position inside zone (not gated by `Persistent`) | overrides everything |
+   | SpawnGroup whitelist | `[UseAllowedSpawnGroups:true]` + `[AllowedSpawnGroups:]` | see note below | over mod ID and faction |
+   | SpawnGroup blacklist | `[UseRestrictedSpawnGroups:true]` + `[RestrictedSpawnGroups:]` | inside zone **and** `[Persistent:true]` | over mod ID and faction |
+   | Mod ID white/blacklist | `[UseAllowedModIDs:true]` + `[AllowedModIDs:]` / `[UseRestrictedModIDs:true]` + `[RestrictedModIDs:]` | inside zone **and** `[Persistent:true]` | over faction |
+   | Faction white/blacklist | `[UseAllowedFactions:true]` + `[AllowedFactions:]` / `[UseRestrictedFactions:true]` + `[RestrictedFactions:]` | inside zone **and** (`[Persistent:true]` or `[PlayerKnownLocation:true]`) | lowest |
+
+   - **[HARD] `Persistent` still gates most restrictions** (`ZoneManager.cs:287-344`), and `Persistent` defaults to `false`.
+   - **[HARD] AllowedSpawnGroups is two rules in one**: with `[UseAllowedSpawnGroups:true]`, every listed SpawnGroup becomes *zone-only* world-wide — it can no longer spawn outside any zone that allows it (`OnlyAllowedZoneSpawns`, collected from every active zone regardless of position). Separately, inside a `Persistent` zone the list restricts spawns to only those groups (collected even without the `Use` gate).
+   - The short-lived `[UseLimitedFactions:]` / `[LimitedFactions:]` zone tags from the first 2.74.00 build were renamed to `UseAllowedFactions` / `AllowedFactions` (MES commit e2d53a7) and are no longer parsed.
+4. **Multiple spheres per zone** *(2.74.00)*: `[CoordinateRadiusPairs:{X:0 Y:0 Z:0},5000]` (repeatable, one pair per tag) adds extra coordinate/radius spheres to one zone.
+5. **Placement helper** *(2.74.03)*: the chat command `/MES.Info.GetLocationMatrix` copies your position/orientation to the clipboard for zone setup.
 
 ---
 

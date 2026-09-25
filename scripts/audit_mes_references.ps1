@@ -61,6 +61,13 @@
       definitions, MES's own shipped container types, and vanilla SE's stock container
       types (scripts/vanilla_container_types.json) - so a typo'd or non-existent loot
       table is still caught.
+    - XML comments (<!-- ... -->) are blanked out before scanning, so a commented-out
+      copy of a profile is not reported as a duplicate definition and its references
+      are not validated.
+    - Prefab/ship-blueprint files (Prefabs/StorePrefabs folders, or any file containing
+      a PrefabDefinition/ShipBlueprintDefinition Id) register only that top-level grid
+      Id. Nested item, component, and assembler-blueprint <Id> entries inside the grid
+      are not profile definitions and are skipped.
 .PARAMETER Path
     Path to the mod's Data or Content directory. Defaults to current directory.
 .PARAMETER IncludePrefabs
@@ -121,6 +128,25 @@ if (Test-Path $vanillaContainerTypesPath) {
 # of the generic per-line SubtypeId scan below.
 function Test-IsContainerTypesFile($file) {
     return $file.Name -match 'ContainerTypes'
+}
+
+# Prefab (and ship-blueprint) files embed whole grids: assembler queues, inventories,
+# and component lists all carry nested <Id><SubtypeId> entries (SteelPlate, Uranium...)
+# that repeat freely and are not MES profile definitions. Only the grid's own top-level
+# PrefabDefinition / ShipBlueprintDefinition Id is registered for these files.
+$gridDefIdPattern = '(?:MyObjectBuilder_)?(?:PrefabDefinition|ShipBlueprintDefinition)'
+function Test-IsPrefabFile($file, $content) {
+    if ($file.FullName -match '\\(Prefabs|StorePrefabs)(\\|$)') { return $true }
+    return $content -match "<TypeId>$gridDefIdPattern</TypeId>|<Id\s[^>]*Type=`"$gridDefIdPattern`""
+}
+
+# Blanks out <!-- ... --> blocks (keeping newlines, so line numbers and indexes stay
+# correct) so commented-out profiles are neither registered as definitions nor scanned
+# for references.
+function Remove-XmlComments([string]$content) {
+    return [regex]::Replace($content, '(?s)<!--.*?-->', {
+        param($m) [regex]::Replace($m.Value, '[^\r\n]', ' ')
+    })
 }
 
 function Get-LineNumberAtIndex($content, $index) {
@@ -236,14 +262,27 @@ function Parse-CsvTags($block, $tagName) {
 
 # Scan pass 1: Collect definitions and references
 foreach ($file in $sbcFiles) {
-    $isPrefab = $file.FullName -match '\\(Prefabs|StorePrefabs)(\\|$)'
+    $content = Remove-XmlComments ([System.IO.File]::ReadAllText($file.FullName))
+    $isPrefab = Test-IsPrefabFile $file $content
     if ($isPrefab -and -not $IncludePrefabs) { continue }
 
-    $content = [System.IO.File]::ReadAllText($file.FullName)
     $lines = $content -split "`r?`n"
     $isContainerTypesFile = Test-IsContainerTypesFile $file
 
-    if ($isContainerTypesFile) {
+    if ($isPrefab) {
+        # Only the grid's own PrefabDefinition/ShipBlueprintDefinition Id is a definition -
+        # nested item/blueprint/component Ids are deliberately not registered (see
+        # Test-IsPrefabFile).
+        $gridIdMatches = [regex]::Matches($content, "(?s)<Id>\s*<TypeId>$gridDefIdPattern</TypeId>\s*<SubtypeId>([^<]+)</SubtypeId>|<Id\s[^>]*?Subtype=`"([^`"]+)`"[^>]*>")
+        foreach ($gm in $gridIdMatches) {
+            if ($gm.Groups[1].Success) {
+                $subId = $gm.Groups[1].Value
+            } elseif ($gm.Value -match "Type=`"$gridDefIdPattern`"") {
+                $subId = $gm.Groups[2].Value
+            } else { continue }
+            Register-Definition $subId $file (Get-LineNumberAtIndex $content $gm.Index) "PrefabDefinition"
+        }
+    } elseif ($isContainerTypesFile) {
         # Only the ContainerType's own Id (TypeId=ContainerTypeDefinition) is a
         # definition - nested <Items><Item> commodity SubtypeIds are deliberately not
         # registered at all (see header comment).

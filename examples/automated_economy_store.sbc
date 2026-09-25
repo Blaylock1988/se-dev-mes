@@ -6,19 +6,27 @@
     Includes the required Builder subtype declaration snippet for FactionTypes_Economy.sbc.
   -->
 
-  <!-- 1. Vanilla StoreItem Definition -->
-  <StoreItems>
-    <StoreItem>
-      <Id>
-        <TypeId>MyObjectBuilder_StoreItemDefinition</TypeId>
-        <SubtypeId>GVK-StoreItem-RoverHeavy</SubtypeId>
-      </Id>
-      <ItemType>Prefab</ItemType>
-      <ItemPrefabName>GVK-Prefab-RoverHeavy</ItemPrefabName>
-      <PricePerUnit>7500000</PricePerUnit>
-      <Amount>1</Amount>
-    </StoreItem>
-  </StoreItems>
+  <!--
+    1. MES Store Items file (not an SBC): Data\StoreItems\GVK-StoreItems-Rovers.xml
+       MES loads it by name from [FileSource:] (ProfileManager.GetStoreItemContainer).
+
+    <StoreItemsContainer xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <StoreItems>
+        <StoreItem>
+          <StoreItemId>RoverHeavy</StoreItemId>
+          <ItemType>Prefab</ItemType>
+          <ItemSubtypeId>GVK-Prefab-RoverHeavy</ItemSubtypeId>
+          <Offer>
+            <CustomPrice>7500000</CustomPrice>
+            <MinPriceMultiplier>100</MinPriceMultiplier>
+            <MaxPriceMultiplier>100</MaxPriceMultiplier>
+            <MinAmount>1</MinAmount>
+            <MaxAmount>1</MaxAmount>
+          </Offer>
+        </StoreItem>
+      </StoreItems>
+    </StoreItemsContainer>
+  -->
 
   <EntityComponents>
     <!-- 2. MES Store Profile -->
@@ -29,7 +37,10 @@
       </Id>
       <Description>
         [MES Store]
-        [StoreItems:GVK-StoreItem-RoverHeavy]
+        [FileSource:GVK-StoreItems-Rovers.xml]
+        [MinOfferItems:1]
+        [MaxOfferItems:1]
+        [RequiredOffers:RoverHeavy]
       </Description>
     </EntityComponent>
 

@@ -13,6 +13,7 @@ import os
 import sys
 import json
 import argparse
+import subprocess
 from query_mes_tags import detect_mes_path, compute_dir_hash, CACHE_FILE, load_cache, build_cache
 
 def main():
@@ -55,6 +56,17 @@ def main():
 
     print("[STATUS: DRIFT DETECTED] Local MES source code has changed since last cache generation!")
     print("Enenra or an MES update has modified files in the MES source tree.")
+
+    cached_commit = (metadata.get('git_commit') or {}).get('sha')
+    if cached_commit:
+        print(f"\nMES commits since cache ({cached_commit[:8]}) touching the C# source:")
+        log = subprocess.run(['git', '-C', mes_path, 'log', '--format=  %h %cs %an: %s',
+                              f'{cached_commit}..HEAD', '--', '.'],
+                             capture_output=True, text=True)
+        print(log.stdout.rstrip() or "  (none - uncommitted local edits?)")
+        print(f"Review with: git -C \"{mes_path}\" diff {cached_commit[:8]} HEAD -- .")
+    else:
+        print("\n(Cache has no MES git commit recorded; rebuild it to enable commit-level drift reports.)")
 
     if args.auto_update:
         print("\n[ACTION] Rebuilding tag cache now...")

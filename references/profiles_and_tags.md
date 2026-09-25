@@ -43,14 +43,14 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
 ### A. Behavior Profiles
 - **Header**: `[RivalAI Behavior]` or `[MES AI Behavior]`
 - **Key Tags**:
-  - `[BehaviorName:<Subclass>]`: `Passive`, `CargoShip`, `Escort`, `Fighter`, `HorseFighter`, `Horsefly`, `Hunter`, `Nautical`, `Scout`, `Sniper`, `Strike`.
+  - `[BehaviorName:<Subclass>]`: `CoreBehavior`, `Passive`, `CargoShip`, `Escort`, `Fighter`, `HorseFighter`, `Horsefly`, `Hunter`, `Nautical`, `NauticalRoutes`, `Patrol`, `Scout`, `Sniper`, `Strike`, `Vulture` (`BehaviorManager.cs` / `ProfileManager.cs`). `FighterPlane` and `HorseNautical` are reachable only at runtime via `[ChangeBehaviorSubclass:true]` + `[NewBehaviorSubclass:]`.
   - `[AutopilotData:<SubtypeId>]`: Reference to `[RivalAI Autopilot]`.
   - `[TargetData:<SubtypeId>]`: Reference to `[RivalAI Target]`.
-  - `[WeaponProfiles:<SubtypeId>]`: Reference to `[RivalAI Weapons]`.
+  - `[WeaponSystem:<SubtypeId>]` (alias `[WeaponsSystem:]`): Reference to `[RivalAI Weapons]`.
   - `[Triggers:<SubtypeId>]`: Direct trigger references (can specify multiple).
   - `[TriggerGroups:<SubtypeId>]`: Modular trigger group references (can specify multiple).
   - `[RemoteControlCode:<string>]`: Custom identifier tag for grid targeting and commands.
-  - `[UseRetreatTimer:bool]`, `[UseNoTargetTimer:bool]`, `[UsePlayerDistanceTimer:bool]`: Default timeout gates.
+  - `[UseRetreatTimer:bool]`, `[UseNoTargetTimer:bool]`, `[UsePlayerDistanceTimer:bool]`: Despawn timer gates (`DespawnSystem.cs`; `UsePlayerDistanceTimer` defaults to `true` — 150 s beyond 25 km from any player despawns the grid).
 
 ### B. Trigger Profiles
 - **Header**: `[RivalAI Trigger]` or `[MES AI Trigger]`
@@ -63,9 +63,13 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
     - `Damage`: Fires when grid takes physical or grinder damage.
     - `Compromised`: Fires when grid power, cockpit, or key blocks are destroyed.
     - `CommandReceived`: Fires on receiving a broadcast code (`CommandReceiveCode`).
-    - `BehaviorTriggerA` / `B` / `C` / `D` / `E`: Triggered internally by AI behaviors (e.g. waypoint arrival, strike breakaway).
-    - `Manual`: Fires only when called via `[ManuallyActivateTrigger:true]`.
+    - `BehaviorTriggerA`–`G`: Triggered internally by AI behaviors (e.g. waypoint arrival, strike breakaway).
     - `Session`: Fires once per game session/load.
+    - `ButtonPress`: Fires from a button panel on **this** grid (`[ButtonPanelName:]` supports variables since MES 2.74.00; buttons on other grids no longer fire it since the cross-grid fix merged 2026-09-21).
+    - `HealthPercentage`: **[HARD]** fires while grid integrity is **at or above** `[PercentageOfHealthRemaining:]` (`TriggerChecks.cs:386` uses `>=`), not when it drops below. For "below X%", use a `Damage` trigger with a Condition `[CheckHealthPercentage:true]` + `[MaxPercentageOfHealthRemaining:X]`.
+    - `PaymentSuccess` / `PaymentFailure`: Fire after a `[ChangePlayerCredits:true]` / `[ChangeNpcFactionCredits:true]` action.
+    - Also: `AcquiredTarget`, `ChangedTarget`, `SwitchedTarget`, `LostTarget`, `HasTarget`, `NoTarget`, `NoWeapon`, `TurretTarget`, `TargetInSafezone`, `PlayerFar`, `PlayerKnownLocation`, `Position`, `WaypointNear`/`WaypointFar` (see crash note in `diagnostics_and_troubleshooting.md` §4.4), `InsideActiveZone`/`OutsideActiveZone` (and the non-Active variants), `HealthPercentage`, `ActiveWeaponsPercentage`/`ActiveGunsPercentage`/`ActiveTurretsPercentage`, `SensorActive`/`SensorIdle`, `JumpRequested`/`JumpCompleted`, `Weather`, `Retreat`, `Despawn`/`DespawnNear`/`DespawnFar`/`DespawnMES`.
+    - `Manual` (convention): MES has no check for this value, so the trigger never fires on its own — only `[ManuallyActivateTrigger:true]` + `[ManuallyActivatedTriggerNames:]`/`[ManuallyActivatedTriggerTags:]` fires it (that path ignores `Type` entirely, §6). Any other unrecognized `Type` value behaves the same way, silently.
   - `[StartsReady:bool]`: If `true`, fires immediately on spawn without waiting for initial cooldown.
   - `[MaxActions:<int>]`: Execution limit (`-1` = infinite, `1` = one-shot).
   - `[Conditions:<SubtypeId>]`: Reference to `[RivalAI Condition]`.
@@ -78,7 +82,8 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
 - **Key Capabilities**:
   - **Spawning**: `[SpawnEncounter:true]` + `[Spawner:<SubtypeId>]`.
   - **Chat/Audio**: `[UseChatBroadcast:true]` + `[ChatData:<SubtypeId>]`, `[PlayDialogueCue:true]` + `[DialogueCueId:<string>]`.
-  - **Weapons**: `[SetWeaponsToMaxRange:true]`, `[EnableWeaponRandomizer:true]`.
+  - **Weapons**: `[SetWeaponsToMaxRange:true]` / `[SetWeaponsToMinRange:true]`. (Weapon randomization is a spawn-time `[MES Manipulation]` feature; no action re-rolls weapons.)
+  - **Credits** *(fixed in MES 537c875, 2026-09-24 — upstream marked untested)*: `[ChangePlayerCredits:true]` + `[ChangePlayerCreditsAmount:]` (or `[ChangePlayerCreditsAmountCounter:{CounterName}]`, 2.74.00), and `[ChangeNpcFactionCredits:true]` + `[ChangeNpcFactionCreditsAmount:]` (or the new `[ChangeNpcFactionCreditsAmountCounter:{CounterName}]`). A deduction now fails (→ `PaymentFailure`) only when it would take the balance below zero; before the fix, deductions always "succeeded", and the NPC-faction path read the *player* amount/counter tags.
   - **Autopilot**: `[ChangeAutopilotProfile:true]` + `[AutopilotProfile:Primary/Secondary]`, `[ChangeAutopilotSpeed:true]` + `[NewAutopilotSpeed:<float>]`, `[ChangeAutopilotMinAltitude:true]` + `[NewAutopilotMinAltitude:<float>]` (use `-1` to reset).
   - **Trigger Control**: `[EnableTriggers:true]` + `[EnableTriggerNames:...]`, `[DisableTriggers:true]` + `[DisableTriggerNames:...]`, `[ResetCooldownTimeOfTriggers:true]` + `[ResetTriggerCooldownNames:...]`.
   - **Tag-Based Trigger/Event Broadcasts**: `[ManuallyActivateTrigger:true]` + `[ManuallyActivatedTriggerTags:...]`, `[EnableTriggerTags:...]`, `[DisableTriggerTags:...]`, `[ResetTriggerCooldownTags:...]`, `[ActivateEvent:true]` + `[ActivateEventTags:...]`, `[ToggleEvents:true]` + `[ToggleEventTags:...]`, `[ResetCooldownTimeOfEvents:true]` + `[ResetEventCooldownTags:...]` — full pool/master-gate/token-support table: §6 below.
@@ -95,10 +100,10 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
 - **Key Tags**:
   - `[MatchAnyCondition:bool]`: If `false` (default), all conditions must match (AND). If `true`, any match passes (OR).
   - `[CheckGridSpeed:bool]`, `[MinGridSpeed:<float>]`, `[MaxGridSpeed:<float>]`.
-  - `[CheckPlayerNear:bool]`, `[PlayerNearDistance:<double>]`.
+  - `[CheckTargetDistance:bool]`, `[MinTargetDistance:<double>]`, `[MaxTargetDistance:<double>]`. (RivalAI Conditions have no `CheckPlayerNear`; use a `PlayerNear` trigger or a `[MES Player Condition]` via `[CheckPlayerCondition:true]` + `[PlayerConditionIds:]`.)
   - `[CheckPlayerReputation:bool]`, `[MinPlayerReputation:<int>]`, `[MaxPlayerReputation:<int>]`.
   - `[CheckCustomCounters:bool]`, `[CustomCounters:<string>]`, `[CustomCountersTargets:<int>]`, `[CounterCompareTypes:<Enum>]`.
-  - `[CheckCommandFromParent:bool]`, `[CommandFromParent:bool]`.
+  - `[CommandCheckFromParent:bool]`, `[CommandFromParent:bool]`.
 
 ### E. Autopilot Profiles
 - **Header**: `[RivalAI Autopilot]` or `[MES AI Autopilot]`
@@ -116,11 +121,11 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
 ### F. Target Profiles
 - **Header**: `[RivalAI Target]` or `[MES AI Target]`
 - **Key Tags**:
-  - `[UsePriorities:bool]`.
-  - `[TargetRules:Player]`, `[TargetRules:Grid]`, `[TargetRules:Air]`, `[TargetRules:Water]`.
-  - `[MaxDistance:<double>]`, `[MinDistance:<double>]`.
-  - `[MatchAllFilters:Relation]`, `[MatchAllFilters:Powered]`, `[MatchAllFilters:OutsideSafezone]`.
-  - `[PrioritizeTargetSubsystems:true]`, `[TargetSubsystems:Weapons]`, `[TargetSubsystems:Thrust]`, `[TargetSubsystems:Power]`.
+  - **[HARD]** `[UseCustomTargeting:true]` master gate (targeting is skipped without it).
+  - `[Target:Player|Grid|Block|PlayerAndGrid|PlayerAndBlock|Coords]`, `[BlockTargets:Guns|Thrusters|Power|...]`, `[GetTargetBy:ClosestDistance]`.
+  - `[MaxDistance:<double>]` (default 12000).
+  - `[MatchAllFilters:Relation]` + `[Relations:Enemy]`, `[MatchAllFilters:Powered]`, `[MatchAllFilters:OutsideOfSafezone]`.
+  - Full enum lists: `behaviors_and_autopilot.md` §4.
 
 ### G. MES Event Profiles (Global Session-Bound)
 - **Header**: `[MES Event]`
@@ -167,13 +172,14 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
 ### K. Manipulation Profiles
 - **Header**: `[MES Manipulation]`
 - **Key Tags**:
-  - `[UseBlockReplacer:bool]`, `[BlockReplacementProfiles:<SubtypeId>]`.
-  - `[UseWeaponRandomizer:bool]`, `[WeaponRandomizerTargetWhitelist:...]`, `[WeaponRandomizerTargetBlacklist:...]`.
+  - `[UseBlockReplacerProfile:bool]` + `[BlockReplacerProfileNames:<SubtypeId>]` (or `[UseBlockReplacer:bool]` + `[ReplaceBlockOld:]`/`[ReplaceBlockNew:]`).
+  - `[RandomizeWeapons:bool]`, `[WeaponRandomizerTargetWhitelist:...]`, `[WeaponRandomizerTargetBlacklist:...]`.
+  - `[UseGridDereliction:bool]` + `[DerelictionProfiles:<SubtypeId>]`.
   - `[ClearExistingContainerTypes:bool]`.
   - `[AssignContainerTypesToAllCargo:<ContainerTypeId>]`.
-  - `[UseContainerTypeAssignment:true]` -> `[ContainerTypeAssignBlockName:<TerminalName>]`, `[ContainerTypeAssignSubtypeId:<ContainerTypeId>]` (counts must match 1:1), or `[ContainerTypeAssignmentReference:{BlockName:ContainerTypeId}]`.
-  - `[ArmorSkins:<string>]`, `[RecolorOld:<Vector3D>]`, `[RecolorNew:<Vector3D>]`.
-  - `[ConvertToAtmospheric:bool]`, `[ConvertToHydrogen:bool]`.
+  - `[UseContainerTypeAssignment:true]` -> `[ContainerTypeAssignBlockName:<TerminalName>]`, `[ContainerTypeAssignSubtypeId:<ContainerTypeId>]` (counts must match 1:1), or `[ContainerTypeAssignmentReference:BlockName|ContainerTypeId,...]`.
+  - `[RecolorGrid:bool]` + `[RecolorOld:<Vector3D>]`/`[RecolorNew:<Vector3D>]`, `[AssignGridSkin:<string>]`, `[SkinRandomBlocks:bool]`.
+  - `[ConfigureSpecialNpcThrusters:bool]` + `[RestrictNpcIonThrust:]`/`[RestrictNpcAtmoThrust:]`/`[RestrictNpcHydroThrust:]`.
 
 ### L. Loot Profiles
 - **Header**: `[MES Loot]`

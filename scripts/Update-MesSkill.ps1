@@ -63,6 +63,19 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# Every tag, profile header and trigger Type the skill teaches must exist in the MES source just cached:
+# the examples, the XML blocks in references/*.md, and every New-MesProfile.ps1 pattern.
+$scaffoldDir = Join-Path ([System.IO.Path]::GetTempPath()) "se-dev-mes-scaffolds"
+New-Item -ItemType Directory -Force $scaffoldDir | Out-Null
+foreach ($pattern in 'DefendedWreck','ConvoyLeaderEscort','DynamicZoneLadder','StoreGrid','DynamicStateNpc','PlanetaryInstallation','CombatDrone','ReinforcementNetwork','BossEncounter') {
+    & powershell -ExecutionPolicy Bypass -File "$PSScriptRoot/New-MesProfile.ps1" -Pattern $pattern -ModPrefix TST -Name Gate -Faction SPRT -OutFile (Join-Path $scaffoldDir "$pattern.sbc") | Out-Null
+}
+& python "$PSScriptRoot/audit_unknown_tags.py" "$repoRoot/examples" "$repoRoot/references" $scaffoldDir --all
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] Skill content uses tags, headers or trigger types that the installed MES does not parse!" -ForegroundColor Red
+    exit 1
+}
+
 # Step 2.5: SKILL.md Size Budget Gate (Progressive Disclosure / Harness Portability)
 # Cline and Anthropic Agent Skills both cap the SKILL.md body at 5,000 tokens (~20k ASCII chars).
 # Over-budget SKILL.md files are silently middle-truncated by harnesses (detail lost, no error shown).

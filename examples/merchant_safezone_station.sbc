@@ -147,7 +147,7 @@
         [Author:TOC Wandering Merchant]
         [Color:Green]
         [ChatMessages:Greetings, {PlayerName}! Welcome aboard. Our trade terminals are open.]
-        [BroadcastType:Chat]
+        [BroadcastChatType:Chat]
       </Description>
     </EntityComponent>
   </EntityComponents>

@@ -6,7 +6,7 @@ Comprehensive reference for MES grid manipulation profiles, block replacement sy
 
 ## 1. Manipulation Profile Architecture (`[MES Manipulation]`)
 
-Manipulation profiles modify NPC grids at the moment of spawning before physics or AI initialize:
+Manipulation profiles modify NPC grids at the moment of spawning, before physics or AI initialize. Attach them to a spawn group with `[ManipulationProfiles:]` (or `[ManipulationGroups:]`); tags written directly in the `[Modular Encounters SpawnGroup]` Description are also parsed as its first Manipulation profile.
 
 ```xml
 <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
@@ -16,22 +16,24 @@ Manipulation profiles modify NPC grids at the moment of spawning before physics 
   </Id>
   <Description>
     [MES Manipulation]
-    [UseBlockReplacer:true]
-    [BlockReplacementProfiles:ModPrefix-BlockReplacement-Military]
-    [UseWeaponRandomizer:true]
-    [WeaponRandomizerTargetWhitelist:MyObjectBuilder_LargeGatlingTurret/(null)]
-    [ClearInventory:true]
-    [ReplenishProfiles:ModPrefix-Replenish-StandardAmmo]
+    [UseBlockReplacerProfile:true]
+    [BlockReplacerProfileNames:ModPrefix-BlockReplacement-Military]
+    [RandomizeWeapons:true]
+    [WeaponRandomizerTargetWhitelist:LargeGatlingTurret]
+    [UseGridDereliction:true]
+    [DerelictionProfiles:ModPrefix-Dereliction-Wreck]
+    [ClearGridInventories:true]
   </Description>
 </EntityComponent>
 ```
 
 ### Key Manipulation Capabilities:
-- **Block Replacer**: Swaps block subtypes (e.g. standard armor to heavy armor, or vanilla thrusters to modded variants).
-- **Weapon Randomizer**: Swaps default weapons with randomized modded weapons.
-- **Inventory Control**: Clears inventories, sets randomized cargo loot, or assigns replenishment profiles.
-- **Hull Cosmetics**: Re-skins armor blocks (`[ArmorSkins:]`) or paints grids to faction colors.
-- **Power & Thrusters**: Converts ion thrusters to atmospheric or hydrogen on planetary spawns (`[ConvertToAtmospheric:true]`, `[ConvertToHydrogen:true]`).
+- **Block Replacer**: `[UseBlockReplacer:true]` + `[ReplaceBlockOld:]`/`[ReplaceBlockNew:]` pairs (or `[ReplaceBlockReference:]`), or `[UseBlockReplacerProfile:true]` + `[BlockReplacerProfileNames:]` pointing at `[MES Block Replacement]` profiles. `[ConvertToHeavyArmor:true]` is a built-in replacement set.
+- **Weapon Randomizer**: `[RandomizeWeapons:true]` (§2).
+- **Dereliction**: `[UseGridDereliction:true]` + `[DerelictionProfiles:]` (§3). Without the gate, `PrefabManipulation.cs:672` skips dereliction entirely.
+- **Inventory Control**: `[ClearGridInventories:true]`, ContainerType assignment (§6). Ammo/fuel top-up is a spawn-group feature (§5).
+- **Hull Cosmetics**: `[RecolorGrid:true]` + `[ColorReferencePairs:]` (or `[RecolorOld:]`/`[RecolorNew:]`), `[ShiftBlockColorsHue:true]`, `[AssignGridSkin:]`, `[SkinRandomBlocks:true]` + `[SkinRandomBlocksTextures:]` + `[MinPercentageSkinRandomBlocks:]`/`[MaxPercentageSkinRandomBlocks:]`, `[ReskinTarget:]`/`[ReskinTexture:]`.
+- **Thrust Restrictions**: `[ConfigureSpecialNpcThrusters:true]` with `[RestrictNpcIonThrust:]` / `[RestrictNpcAtmoThrust:]` / `[RestrictNpcHydroThrust:]` and per-type `ThrustForceMultiply` / `ThrustPowerMultiply` tags (e.g. `[NpcAtmoThrustForceMultiply:]`). MES has no thruster-type conversion tag.
 
 ---
 
@@ -39,9 +41,10 @@ Manipulation profiles modify NPC grids at the moment of spawning before physics 
 
 MES includes an automated weapon replacement pipeline that dynamically upgrades or randomizes turret and fixed-weapon arsenals:
 
-- `[UseWeaponRandomizer:true]`
-- `[WeaponRandomizerTargetWhitelist:<TypeId>/<SubtypeId>]`: Specifies which weapon blocks on the prefab may be replaced.
-- `[WeaponRandomizerTargetBlacklist:<TypeId>/<SubtypeId>]`: Excludes critical weapons from being altered.
+- `[RandomizeWeapons:true]`: Master switch.
+- `[WeaponRandomizerTargetWhitelist:<SubtypeId or TypeId/SubtypeId>]` / `[WeaponRandomizerTargetBlacklist:...]`: Which weapon blocks on the prefab may be replaced (`WeaponRandomizer.cs:969` matches either form).
+- `[WeaponRandomizerWhitelist:...]` / `[WeaponRandomizerBlacklist:...]`: Which weapons may be installed as replacements.
+- `[RandomWeaponChance:<int>]`, `[RandomWeaponSizeVariance:<int>]`, `[NonRandomWeaponNames:]` / `[NonRandomWeaponIds:]`.
 
 ### The `<Public>true</Public>` Requirement:
 > [!CAUTION]
@@ -55,7 +58,7 @@ MES includes an automated weapon replacement pipeline that dynamically upgrades 
 
 ## 3. Dereliction & Damaged Block Rendering (`[MES Dereliction]`)
 
-Dereliction transforms clean prefabs into battle-damaged, smoking, sparking ruins:
+Dereliction transforms clean prefabs into battle-damaged, smoking, sparking ruins. Reference it from a Manipulation profile with `[UseGridDereliction:true]` + `[DerelictionProfiles:]`.
 
 ```xml
 <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
@@ -65,19 +68,24 @@ Dereliction transforms clean prefabs into battle-damaged, smoking, sparking ruin
   </Id>
   <Description>
     [MES Dereliction]
+    [Blocks:MyObjectBuilder_CubeBlock/LargeBlockArmorBlock]
+    [Blocks:MyObjectBuilder_CubeBlock/LargeBlockArmorSlope]
+    [Chance:40]
     [UseSeparatePercentages:true]
     [MinIntegrityPercentage:20]
     [MaxIntegrityPercentage:65]
     [MinBuildPercentage:10]
     [MaxBuildPercentage:45]
-    [ChanceBlockDamaged:40]
   </Description>
 </EntityComponent>
 ```
 
+- **[HARD] `[Blocks:]` is required**: `DerelictionProfile.ProcessBlock()` (line 144) returns immediately for any block not in the `[Blocks:]` list. With `[MatchOnlyTypeId:true]`, a listed block's TypeId matches every subtype of that type. A profile without `[Blocks:]` does nothing.
+- `[Chance:<0-100>]`: Per-block roll (default `100`).
+
 ### The Separate Percentages Rule:
 > [!CAUTION]
-> **[HARD] The Scaffolding Trap**: In `DerelictionProfile.cs` (lines 171–188), if `[UseSeparatePercentages:true]` is omitted (it defaults to `false`), MES sets:
+> **[HARD] The Scaffolding Trap**: In `DerelictionProfile.cs` (lines 171–188), if `[UseSeparatePercentages:true]` is omitted (it defaults to `false`), MES rolls one value from `[MinPercentage:]`/`[MaxPercentage:]` and sets:
 > `build = value; integrity = value;`
 > In the Space Engineers engine, when `BuildPercentage == IntegrityPercentage`, a block renders as an **unfinished construction skeleton** rather than a damaged/smoking block!
 > Furthermore, `MinIntegrityPercentage`, `MaxIntegrityPercentage`, `MinBuildPercentage`, and `MaxBuildPercentage` are completely ignored unless `[UseSeparatePercentages:true]` is explicitly declared.
@@ -86,34 +94,38 @@ Dereliction transforms clean prefabs into battle-damaged, smoking, sparking ruin
 
 ## 4. Bot Spawning (AiEnabled Integration) (`[MES Bot Spawn]`)
 
-MES natively integrates with the **AiEnabled** framework to spawn walking crew, security androids, and combat bots inside spawned NPC grids:
+MES integrates with the **AiEnabled** mod through `[MES Bot Spawn]` profiles. A bot profile describes one bot and is used by two different spawn paths:
 
 ```xml
 <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
   <Id>
     <TypeId>Inventory</TypeId>
-    <SubtypeId>ModPrefix-BotSpawn-SecurityTeam</SubtypeId>
+    <SubtypeId>ModPrefix-BotSpawn-Soldier</SubtypeId>
   </Id>
   <Description>
     [MES Bot Spawn]
-    [BotProfiles:CombatBot_Assault]
-    [BotProfiles:CombatBot_Sniper]
-    [BotSpawnChance:75]
-    [BotMaxQuantity:4]
-    [BotRoles:Defender]
+    [UseAiEnabled:true]
+    [BotType:<AiEnabled bot subtype>]
+    [BotBehavior:Default]
+    [BotDisplayName:Security]
+    [CanUseSeats:true]
+    [CanDamageGrids:false]
   </Description>
 </EntityComponent>
 ```
 
+1. **Crew inside a live grid (RivalAI Action)**: `[AddBotsToGrid:true]` + `[BotSpawnProfileNames:ModPrefix-BotSpawn-Soldier]` + `[BotCount:<int>]`, optionally `[OnlySpawnBotsInPressurizedRooms:true]`.
+2. **Standalone ground spawns (Spawn Conditions)**: `[CreatureSpawn:true]` + `[BotProfiles:<BotSpawnSubtypeId>]` + `[MinCreatureCount:]`/`[MaxCreatureCount:]` + `[MinCreatureDistance:]`/`[MaxCreatureDistance:]` (`BotSpawner.cs:65` picks one listed profile at random per bot).
+
 ### AiEnabled Integration Notes:
 - **Grid Waypoints**: AiEnabled requires grids to have navigable corridors or walkable surfaces for bots to pathfind effectively.
-- **Spawn Block Triggers**: Bot spawns can be tied to specific blocks (e.g. Cryo Chambers, Medical Rooms) or triggered when player breaches interior doors.
+- `[UseAiEnabled:]` defaults to `true`; without the AiEnabled mod loaded, only vanilla creature/bot types can spawn.
 
 ---
 
-## 5. Replenishment Profiles (`[MES Replenishment]`)
+## 5. Replenishment (`[ReplenishSystems:]` + `[MES Replenishment]`)
 
-For persistent encounters, long-running static stations, or roaming convoys, replenishment profiles automatically restock spent ammunition, fuel, and supplies:
+Replenishment is a **spawn-group** feature: with `[ReplenishSystems:true]` in the `[Modular Encounters SpawnGroup]` Description, MES fills ammo, fuel and similar system inventories when the grid spawns (`NpcData.cs:762` → `InventoryHelper.ReplenishGridSystems`). `[ReplenishProfiles:]` (also on the spawn group) points at `[MES Replenishment]` profiles that cap or exclude items:
 
 ```xml
 <EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
@@ -123,15 +135,16 @@ For persistent encounters, long-running static stations, or roaming convoys, rep
   </Id>
   <Description>
     [MES Replenishment]
-    [RestockItems:MyObjectBuilder_AmmoMagazine/NATO_25x184mm]
-    [RestockAmounts:100]
-    [RestockCooldownMs:120000]
+    [MaxItemId:MyObjectBuilder_AmmoMagazine/NATO_25x184mm]
+    [MaxItemAmount:100]
+    [RestrictedItems:MyObjectBuilder_AmmoMagazine/LargeRailgunAmmo]
   </Description>
 </EntityComponent>
 ```
 
-- Prevents NPC turrets from running out of ammunition during extended sieges or player skirmishes.
-- Offloads inventory management from PB scripts to performant native MES background workers.
+- `[MaxItemId:]` / `[MaxItemAmount:]` are paired lists (index-matched; extra entries are dropped).
+- `[IgnoreGlobalReplenishProfiles:true]` on the spawn group skips server-wide profiles.
+- Runtime top-up during combat is a different mechanism: `[UseAmmoReplenish:true]` + `[AmmoReplenishClipAmount:]` + `[MaxAmmoReplenishments:]` in `[RivalAI Weapons]`.
 
 ---
 
@@ -206,7 +219,7 @@ Manipulation profiles modify prefab inventories at spawn:
 - **`[AssignContainerTypesToAllCargo:<ContainerTypeId>]`**: Replaces the container type on all cargo blocks across the grid (randomly selects if multiple are listed). Automatically ignores decorative DLC lockers.
 - **`[UseContainerTypeAssignment:true]`**: **Master Gate** for selective assignment.
 - **`[ContainerTypeAssignBlockName:<TerminalName>]`** + **`[ContainerTypeAssignSubtypeId:<ContainerTypeId>]`**: Paired lists mapping block names to specific loot tables.
-- **`[ContainerTypeAssignmentReference:{BlockName:ContainerTypeId}]`**: Dictionary syntax alternative.
+- **`[ContainerTypeAssignmentReference:BlockName|ContainerTypeId,BlockName2|ContainerTypeId2]`**: Dictionary syntax alternative (`TagParse.TagStringDictionaryCheck`: comma-separated `key|value` pairs). **[HARD]** Every entry needs a `|` (a bare name throws `IndexOutOfRangeException`), and the duplicate check tests the *value* instead of the key, so listing the same block name twice throws on `Dictionary.Add`.
 - **`[ClearExistingContainerTypes:true]`**: Flushes pre-existing container types before applying new ones.
 
 > [!CAUTION]

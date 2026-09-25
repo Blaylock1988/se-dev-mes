@@ -47,7 +47,7 @@ When testing whether triggers fire and actions execute, **never create throwaway
 > **Remove Debug Tags Before Production Release**:
 > - `[DebugMessage]` is strictly a development diagnostic. It sends raw chat messages to all players without checking player distances, faction relations, broadcast radius, or radio antennas.
 > - **Never** use `[DebugMessage]` as a substitute for real NPC chat messages.
-> - For in-game player-facing dialogue, always use dedicated `[RivalAI Chat]` profiles configured with proper broadcast ranges (`[ChatRadius:...]`), colors, channels, and audio sound effects.
+> - For in-game player-facing dialogue, always use dedicated `[RivalAI Chat]` profiles configured with proper broadcast range (antenna range, or `[IgnoreAntennaRequirement:true]` + `[IgnoredAntennaRangeOverride:<m>]`), `[BroadcastChatType:]`, colors, and audio.
 
 ---
 
@@ -252,8 +252,8 @@ When troubleshooting encounter loading or execution failures, search `SpaceEngin
 - **Result**: The grid spawns as unowned ("Nobody") or drifts inertly without executing its RivalAI behavior profile.
 - **Fix**:
   1. Ensure the prefab contains at least one intact Remote Control block.
-  2. If the prefab has multiple Remote Controls, ensure `[AssignGridControlToFirstRemote:true]` is set in `[MES Spawn]` or the primary Remote Control has priority.
-  3. Ensure ownership is properly assigned via `[FactionOwner:<FactionTag>]` in the `SpawnGroup`.
+  2. If the prefab has multiple Remote Controls, MES attaches the behavior to the one flagged **Main Remote Control** in the prefab, otherwise the first one it finds (`BehaviorBuilder.cs`). To pick one by name, set `[ApplyBehaviorToNamedBlock:<CustomName>]` in the `[MES Manipulation]` profile.
+  3. Ensure ownership is properly assigned via `[FactionOwner:<FactionTag>]` (Spawn Conditions, or inline in the `[Modular Encounters SpawnGroup]` Description).
 
 ### 9. Grid Sets Waypoints Properly But Refuses to Tilt Up or Down (Pitch Lock)
 - **Cause**:

@@ -13,7 +13,7 @@ MES contains built-in hooks for WeaponCore grids, but deep architectural mismatc
 - **The Fix**: Any combat encounter with long-range or capital weapons must execute `[SetWeaponsToMaxRange:true]` in an early trigger action (e.g. on spawn, on player proximity, or on damage) to allow WC turrets to engage past 800m.
 
 ### B. The Dynamic Replacement Range Desync (The MES vs. WC Conflict)
-- **[HARD] The Bug**: When weapons are dynamically swapped via `[UseWeaponRandomizer:true]` or `[BlockReplacementProfiles]`, `SetWeaponsToMaxRange:true` frequently **fails to unclamp the weapons**.
+- **[HARD] The Bug**: When weapons are dynamically swapped via `[RandomizeWeapons:true]` or a block replacer profile (`[BlockReplacerProfileNames:]`), `SetWeaponsToMaxRange:true` frequently **fails to unclamp the weapons**.
   - In `WeaponRandomizer.cs:1321`, MES queries `APIs.WeaponCore.GetMaxWeaponRange(termBlock, 0)`.
   - Because WeaponCore registers newly spawned blocks asynchronously, the API call often returns `0` or default range before WC finishes registration.
   - Furthermore, `GetMaxWeaponRange` in WC returns the current slider range (`MaxTargetDistance`) rather than the true maximum range, so clamping to 800m causes WC to report 800m as the maximum.
@@ -129,7 +129,7 @@ When operating on worlds running the Water Mod:
 
 - **Behavior Subclass**: Set `[BehaviorName:Nautical]` in `[RivalAI Behavior]`.
 - **Autopilot Profile**: Use `[RivalAI Autopilot]` configured with nautical buoyancy locks.
-- **Spawn Conditions**: Use `[MES Spawn Conditions]` with `[WaterRequired:true]` or `[UnderwaterSpawn:true]`.
+- **Spawn Conditions**: Use `[MES Spawn Conditions]` with `[MustSpawnUnderwater:true]` (or `[CanSpawnUnderwater:true]`), `[MinWaterCoverage:]`/`[MaxWaterCoverage:]`, and for installations `[InstallationSpawnsOnWaterSurface:true]`/`[InstallationSpawnsUnderwater:true]` with `[MinWaterDepth:]`/`[MaxWaterDepth:]` (`MaxWaterDepth` defaults to 0 — always set it; see `spawning_and_conditions.md` §3.B).
 - **Anti-Sinking Logic**: Ensure buoyancy tanks or flotation blocks are prioritized in defense triggers.
 
 ---

@@ -106,27 +106,33 @@ flowchart TD
   </Id>
   <Description>
     [RivalAI Target]
-    [UsePriorities:true]
-    [TargetRules:Player]
-    [TargetRules:Grid]
+    [UseCustomTargeting:true]
+    [Target:PlayerAndBlock]
+    [BlockTargets:Guns]
+    [BlockTargets:Thrusters]
+    [BlockTargets:Power]
+    [GetTargetBy:ClosestDistance]
     [MaxDistance:4000]
-    [MinDistance:10]
     [MatchAllFilters:Relation]
     [MatchAllFilters:Powered]
-    [MatchAllFilters:OutsideSafezone]
-    [PrioritizeTargetSubsystems:true]
-    [TargetSubsystems:Weapons]
-    [TargetSubsystems:Thrust]
-    [TargetSubsystems:Power]
+    [MatchAllFilters:OutsideOfSafezone]
+    [Relations:Enemy]
   </Description>
 </EntityComponent>
 ```
 
-- **TargetSubsystems**: Focuses turret and fixed-weapon fire on specific block types (`Weapons`, `Thrust`, `Power`, `Cockpit`, `Communications`).
-- **MatchAllFilters**:
-  - `Relation`: Targets only hostile grids (`Enemies`).
+- **[HARD] `[UseCustomTargeting:true]` is the master gate**: `TargetingSystem.cs:268` returns before any target acquisition when it is `false` (the default), so a Target profile without it never selects a target.
+- **`[Target:]`** (`TargetTypeEnum`): `Player`, `Grid`, `Block`, `PlayerAndGrid`, `PlayerAndBlock`, `Coords`, `Entity`, `Override`. Default `None`.
+- **`[BlockTargets:]`** (`BlockTypeEnum`, repeatable): with a `Block` target type, focuses fire on block categories such as `Guns`, `Turrets`, `Thrusters`, `Power`, `Gyros`, `Controllers`, `Antennas`, `JumpDrives`, `Shields`, `Production`.
+- **`[GetTargetBy:]`**: `ClosestDistance` (default), `FurthestDistance`, `HighestTargetValue`, `LowestTargetValue`, `Random`.
+- **`[MaxDistance:]`**: Default 12000 m.
+- **`[MatchAllFilters:]` / `[MatchAnyFilters:]` / `[MatchNoneFilters:]`** (`TargetFilterEnum`):
+  - `Relation`: Applies `[Relations:]` (`Enemy`, `Neutral`, `Friends`, `Faction`).
+  - `Owner`: Applies `[Owners:]` (`Unowned`, `Player`, `NPC`).
   - `Powered`: Ignores unpowered floating wrecks.
-  - `OutsideSafezone`: Prevents wasting ammunition against safezone shields.
+  - `OutsideOfSafezone`: Prevents wasting ammunition against safezone shields.
+  - Also `Altitude`, `Broadcasting`, `Faction`, `Gravity`, `LineOfSight`, `MovementScore`, `Name`, `PlayerControlled`, `PlayerKnownLocation`, `Shielded`, `Speed`, `Static`, `TargetValue`, `Underwater`, `AirDensity`, `GravityThrust`, `IgnoreStealthDrive`.
+- There are no `[UsePriorities:]`, `[TargetRules:]` or `[TargetSubsystems:]` tags; MES ignores them.
 
 ---
 

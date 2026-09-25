@@ -11,19 +11,23 @@ inside each profile against `scripts/mes_tag_cache.json` (built from the MES sou
 Typical hits: a tag copied from an older wiki page or another profile type (`[StrikeBeginPlanetAttackRunDistance]`
 in an autopilot profile), a tag that exists as a field but has no parser (`[AttackRunMaxTimeTrigger]`), or a typo.
 
-By default only profile types whose parser is fully covered by the cache are checked: RivalAI Autopilot,
-RivalAI Weapons and RivalAI Target. `[MES AI X]` headers are checked as `[RivalAI X]`, and the three
-`[MES Event ... Template]` headers as their non-template profile. Use --profile or --all to check other types
-and treat the result as a hint to verify in the source (--all is what Update-MesSkill.ps1 runs on the skill's
-own examples).
+Every profile type in the cache is checked. `[MES AI X]` headers are checked as `[RivalAI X]`, and the three
+`[MES Event ... Template]` headers as their non-template profile. Use --profile to check only some types.
+A hit on a tag parsed by unusual custom code is still worth confirming in the source before deleting it.
+
+It also checks each known tag's value against the TagParse function that reads it (recorded in the cache as
+`parser`). Those parsers fail silently: an unparseable value leaves the field at its default, with no log.
+The classic trap is a Yes/No/Ignore tag (`[GridDestructible:]`, `[GridEditable:]`, `[IsStatic:]` ...) given
+`true`/`false`: MES's CheckEnum parse is case-sensitive and only knows Yes/No/Ignore, so the action does
+nothing. Values containing a `{token}` are skipped (they are only known after substitution).
 
 Usage:
   python audit_unknown_tags.py <folder-or-file.sbc> [more paths ...]
-  python audit_unknown_tags.py path --profile "RivalAI Trigger"       (check this type instead; repeatable)
-  python audit_unknown_tags.py path --all                             (check every type in the cache)
+  python audit_unknown_tags.py path --profile "RivalAI Trigger"       (check only this type; repeatable)
   python audit_unknown_tags.py path --show-ok                         (also list files with no findings)
+  (--all is accepted for compatibility; every type is checked by default.)
 
-Exit code: 0 = nothing found, 1 = unknown tags found, 2 = usage / cache error.
+Exit code: 0 = nothing found, 1 = unknown tags or invalid values found, 2 = usage / cache error.
 Only profiles whose `<Description>` starts with a recognised `[Profile Type]` header are checked.
 Markdown files are scanned too: the fenced code blocks of the skill's own references/*.md.
 """
@@ -36,7 +40,26 @@ import sys
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 
-DEFAULT_PROFILES = {"RivalAI Autopilot", "RivalAI Weapons", "RivalAI Target"}
+INT_RE = re.compile(r"^\s*[+-]?\d+\s*$")
+NUM_RE = re.compile(r"^\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?\s*$")
+# TagParse.cs parser -> (value accepted?, what MES accepts, what happens otherwise). Each rule mirrors the
+# parser's own TryParse call: bool.TryParse (case-insensitive), CheckEnum Enum.TryParse (case-SENSITIVE,
+# members Ignore/No/Yes or their numbers), BoolEnum Enum.TryParse(ignoreCase: true), int/long/double/float
+# TryParse, and TagIntOrDayCheck's literal "Day".
+VALUE_RULES = {
+    "TagBoolCheck": (lambda v: v.strip().lower() in ("true", "false"),
+                     "true or false", "ignored, field keeps its default"),
+    "TagCheckEnumCheck": (lambda v: v.strip() in ("Yes", "No", "Ignore") or INT_RE.match(v),
+                          "Yes, No or Ignore (case-sensitive)", "ignored, field stays Ignore so the setting has no effect"),
+    "TagBoolEnumCheck": (lambda v: v.strip().lower() in ("true", "false", "none"),
+                         "True, False or None", "field is reset to None"),
+    "TagIntCheck": (lambda v: INT_RE.match(v), "a whole number", "ignored, field keeps its default"),
+    "TagLongCheck": (lambda v: INT_RE.match(v), "a whole number", "ignored, field keeps its default"),
+    "TagDoubleCheck": (lambda v: NUM_RE.match(v), "a number", "ignored, field keeps its default"),
+    "TagFloatCheck": (lambda v: NUM_RE.match(v), "a number", "ignored, field keeps its default"),
+    "TagIntOrDayCheck": (lambda v: v.strip() == "Day" or INT_RE.match(v),
+                         "a whole number or Day", "ignored, field keeps its default"),
+}
 # Headers that MES parses with another profile's tag list.
 HEADER_ALIASES = {
     "RivalAI Behaviour": "RivalAI Behavior",
@@ -59,6 +82,7 @@ KNOWN_HEADERS = {
     "MES Suit Upgrades", "MES Weapon Mod Rules", "MES Zone", "MES Zone Conditions",
 }
 TRIGGER_TYPES = set()
+PARSERS = {}
 CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mes_tag_cache.json")
 TAG_RE = re.compile(r"\[([A-Za-z0-9_]+):([^\]]*)\]")
 HEADER_RE = re.compile(r"^\s*\[([A-Za-z][A-Za-z0-9 ]*)\]", re.M)
@@ -68,12 +92,20 @@ def load_cache():
     with open(CACHE, encoding="utf-8") as f:
         data = json.load(f)
     valid = defaultdict(set)
+    parsers = {}
     for t in data["tags"]:
         valid[t["profile"]].add(t["tag"])
-    global TRIGGER_TYPES
+        if t.get("parser"):
+            parsers[(t["profile"], t["tag"])] = t["parser"]
+    global TRIGGER_TYPES, PARSERS
     TRIGGER_TYPES = set(data.get("values", {}).get("RivalAI Trigger.Type", []))
     # A SpawnGroup's own Description is also parsed as its first Spawn Conditions and Manipulation profile.
     valid["Modular Encounters SpawnGroup"] |= valid["MES Spawn Conditions"] | valid["MES Manipulation"]
+    for src in ("MES Manipulation", "MES Spawn Conditions", "Modular Encounters SpawnGroup"):
+        for (p, tag), fn in list(parsers.items()):
+            if p == src:
+                parsers.setdefault(("Modular Encounters SpawnGroup", tag), fn)
+    PARSERS = parsers
     return valid
 
 
@@ -131,8 +163,8 @@ def files_under(paths):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("paths", nargs="+")
-    ap.add_argument("--profile", action="append", help="check this profile type instead of the defaults (repeatable)")
-    ap.add_argument("--all", action="store_true", help="check every profile type in the cache")
+    ap.add_argument("--profile", action="append", help="check only this profile type (repeatable)")
+    ap.add_argument("--all", action="store_true", help="accepted for compatibility; every type is checked by default")
     ap.add_argument("--show-ok", action="store_true")
     a = ap.parse_args()
     try:
@@ -140,8 +172,9 @@ def main():
     except (OSError, ValueError, KeyError) as e:
         print("cannot read %s: %s" % (CACHE, e))
         return 2
-    wanted = set(valid) if a.all else (set(a.profile) if a.profile else DEFAULT_PROFILES)
+    wanted = set(a.profile) if a.profile else set(valid)
     total = 0
+    bad_values = 0
     for f in files_under(a.paths):
         hits = []
         checked = 0
@@ -172,13 +205,20 @@ def main():
                     elif other:
                         note = " (is a %s tag)" % ", ".join(other)
                     hits.append("  %s [%s] [%s:...]%s" % (sid, header, tag, note))
+                    continue
+                rule = VALUE_RULES.get(PARSERS.get((header, tag)))
+                value = m.group(2)
+                if rule and "{" not in value and not rule[0](value):
+                    hits.append("  %s [%s] [%s:%s] invalid value - MES accepts %s; otherwise %s" % (
+                        sid, header, tag, value, rule[1], rule[2]))
+                    bad_values += 1
         if hits:
             print("%s" % f)
             print("\n".join(hits))
             total += len(hits)
         elif a.show_ok and checked:
             print("%s: OK (%d profiles)" % (f, checked))
-    print("\n%d unknown tag(s) found." % total)
+    print("\n%d unknown tag(s) and %d invalid value(s) found." % (total - bad_values, bad_values))
     return 1 if total else 0
 
 

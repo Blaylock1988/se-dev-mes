@@ -152,7 +152,26 @@ def find_mes_files(mes_path):
                         file_map[ptype].append(os.path.join(root, f))
     return file_map
 
+BLOCK_TAG_RE = re.compile(r'\.(?:StartsWith|Contains)\("\[?[a-zA-Z0-9_]+[:"]')
+TAGPARSE_RE = re.compile(r'TagParse\.(\w+)\(')
+
+
+def block_parser(lines, idx):
+    """TagParse function used by the `if (tag.Contains("[X:"))` block that starts on line idx (1-based):
+    the first TagParse.* call before the next tag test, within a few lines. None if the block parses
+    the value some other way."""
+    for j in range(idx - 1, min(idx + 11, len(lines))):
+        if j > idx - 1 and BLOCK_TAG_RE.search(lines[j]):
+            return None
+        m = TAGPARSE_RE.search(lines[j])
+        if m:
+            return m.group(1)
+    return None
+
+
 def parse_tags_from_file(file_path):
+    """Yield (tag_name, data_type, line_no, parser_fn) for every tag the file parses. parser_fn is the
+    TagParse.* function that reads the value (None when it can't be determined)."""
     tags = []
     if not os.path.exists(file_path):
         return tags
@@ -167,7 +186,7 @@ def parse_tags_from_file(file_path):
             tag_name = m_dict.group(1)
             parser_fn = m_dict.group(2)
             data_type = TYPE_MAP.get(parser_fn, parser_fn)
-            tags.append((tag_name, data_type, idx))
+            tags.append((tag_name, data_type, idx, parser_fn))
             continue
 
         # Pattern 2: Dictionary entry with direct assignment or other helper
@@ -183,7 +202,7 @@ def parse_tags_from_file(file_path):
                 dtype = 'numeric / enum'
             else:
                 dtype = 'custom parse'
-            tags.append((tag_name, dtype, idx))
+            tags.append((tag_name, dtype, idx, None))
             continue
 
         # Pattern 3: tag.StartsWith("[TagName:") or tag.Contains("[TagName:")
@@ -193,8 +212,11 @@ def parse_tags_from_file(file_path):
         # (and aliases share a line: Contains("[WeaponsSystem:") || Contains("[WeaponSystem:"))
         names = (re.findall(r'\w+\.(?:StartsWith|Contains)\("\[([a-zA-Z0-9_]+)(?::|")', line)
                  or re.findall(r'tag\.(?:StartsWith|Contains)\("([a-zA-Z0-9_]+):"', line))
+        if names:
+            parser_fn = block_parser(lines, idx)
+            dtype = TYPE_MAP.get(parser_fn, parser_fn) if parser_fn else 'custom / block parse'
         for tag_name in names:
-            tags.append((tag_name, 'custom / block parse', idx))
+            tags.append((tag_name, dtype, idx, parser_fn))
 
     return tags
 
@@ -233,18 +255,21 @@ def build_cache(mes_path):
     for ptype, fpaths in sorted(file_map.items()):
         for fpath in fpaths:
             parsed = parse_tags_from_file(fpath)
-            for tag_name, dtype, line_no in parsed:
+            for tag_name, dtype, line_no, parser_fn in parsed:
                 key = (ptype, tag_name.lower())
                 if key in seen:
                     continue
                 seen.add(key)
-                all_tags.append({
+                entry = {
                     'profile': ptype,
                     'tag': tag_name,
                     'type': dtype,
                     'file': os.path.basename(fpath),
                     'line': line_no
-                })
+                }
+                if parser_fn:
+                    entry['parser'] = parser_fn
+                all_tags.append(entry)
 
     # Trigger types are string compares (trigger.Type == "Timer"), not an enum, so collect them here.
     trigger_types = set()

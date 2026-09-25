@@ -204,7 +204,10 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
 
 | Parser Function in MES | SBC Tag Syntax | Expected Format / Example |
 | :--- | :--- | :--- |
-| `TagBoolCheck` | `[TagName:true]` | `true` or `false` (all lowercase) |
+| `TagBoolCheck` | `[TagName:true]` | `true` or `false` (`bool.TryParse`, case-insensitive) |
+| `TagCheckEnumCheck` | `[GridDestructible:Yes]` | **`Yes`, `No` or `Ignore` only, case-sensitive.** `true`/`false`/`yes` are silently ignored and the field stays `Ignore`, so the action does nothing. Used by `GridDestructible`, `SubGridsDestructible`, `GridEditable`, `SubGridsEditable` (RivalAI Action) and `IsStatic` (RivalAI Target). |
+| `TagBoolEnumCheck` | `[TagName:True]` | `True`, `False` or `None` (case-insensitive); anything else resets the field to `None` |
+| `TagIntOrDayCheck` | `[KnownPlayerAreaTimer:30]` | Integer, or the literal `Day` (one in-game day-cycle length in minutes) |
 | `TagStringCheck` | `[TagName:Value]` | Plain text string |
 | `TagStringListCheck` | `[TagName:ValA,ValB]` | Comma-separated strings |
 | `TagIntCheck` | `[TagName:10]` | Integer number |
@@ -215,6 +218,8 @@ Every profile must be defined inside an `<EntityComponent xsi:type="MyObjectBuil
 | `TagVector3DListCheck` | `[TagName:{X:0...},{X:1...}]` | Comma-separated 3D vectors |
 | `TagCompareEnumCheck` | `[TagName:GreaterOrEqual]` | `Greater`, `GreaterOrEqual`, `Less`, `LessOrEqual`, `Equal`, `NotEqual` |
 | `TagDirectionEnumCheck`| `[TagName:Forward]` | `Forward`, `Backward`, `Left`, `Right`, `Up`, `Down` |
+
+**[HARD]** Every `TagParse` value parser fails silently: a value it can't parse leaves the field at its default (or `None` for `TagBoolEnumCheck`), with no log line. `scripts/audit_unknown_tags.py` checks bool, Yes/No/Ignore, BoolEnum, int, long, float, double and int-or-Day values against the parser each tag actually uses (the cache records it as `parser`).
 
 ---
 

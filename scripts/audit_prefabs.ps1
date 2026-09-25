@@ -84,9 +84,15 @@ foreach ($file in $prefabFiles) {
 
     $fileNameWithoutExt = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
     
-    # Fast regex match for SubtypeId inside <Prefab>
-    $subtypeMatch = [System.Text.RegularExpressions.Regex]::Match($raw, '(?s)<Prefab\b[^>]*>.*?<Id>.*?<SubtypeId>(.*?)</SubtypeId>')
-    
+    # Prefab Id: SE's own exporter writes the attribute form
+    # <Id Type="MyObjectBuilder_PrefabDefinition" Subtype="Name" />; hand-written files
+    # often use <Id><TypeId/><SubtypeId/></Id>. Both deserialize to the same SubtypeId.
+    $subtypeMatch = [System.Text.RegularExpressions.Regex]::Match($raw, '(?s)<Prefab\b[^>]*>\s*<Id\s[^>]*?Subtype="([^"]*)"')
+
+    if (-not $subtypeMatch.Success) {
+        $subtypeMatch = [System.Text.RegularExpressions.Regex]::Match($raw, '(?s)<Prefab\b[^>]*>.*?<Id>.*?<SubtypeId>(.*?)</SubtypeId>')
+    }
+
     if (-not $subtypeMatch.Success) {
         # Fallback: check general SubtypeId
         $subtypeMatch = [System.Text.RegularExpressions.Regex]::Match($raw, '<SubtypeId>(.*?)</SubtypeId>')

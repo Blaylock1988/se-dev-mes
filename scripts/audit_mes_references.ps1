@@ -10,15 +10,25 @@
        - MES Events, Event Actions, Event Conditions
        - Zones
     2. Collect all referenced SubtypeIds across:
-       - Remote Control profiles: [Triggers], [TriggerGroups]
-       - Trigger profiles: [Conditions], [Actions]
+       - Behavior profiles: [Triggers], [TriggerGroups], [AutopilotData],
+         [SecondaryAutopilotData], [TertiaryAutopilotData], [TargetData], [WeaponSystem]
+       - Trigger profiles: [Conditions], [Actions], [ElseActions], [DisableNamedTriggerOnSuccess]
        - TriggerGroup profiles: [Triggers]
-       - Action profiles: [Spawner], [SpawnData], [Chat], [ChatData], [CommandProfileIds], [ToggleEventIds]
+       - Action profiles: [Spawner], [SpawnData], [Chat], [ChatData], [CommandProfileIds],
+         [ToggleEventIds], [Enable/Disable/ResetTriggerCooldownNames], [WaypointsToAdd],
+         [NewBehavior], [ContractBlockProfiles], [InstanceEventGroupId]
+       - Condition profiles: [RequiredSpawnConditions], [PlayerConditionIds]
        - Spawner profiles: [SpawnGroups]
-       - SpawnGroup definitions: [SpawnConditionsProfiles], <Prefab SubtypeId="...">
-       - Event profiles: [ConditionIds], [ActionIds]
+       - SpawnGroup definitions: [SpawnConditionsProfiles], [SpawnConditionGroups],
+         [ManipulationGroups], <Prefab SubtypeId="...">, <Behaviour> (warning only)
+       - Spawn condition / zone profiles: [ZoneConditions], [RestrictedSpawnGroups],
+         [AllowedSpawnGroups]
+       - Event profiles & templates: [ConditionIds], [PersistantConditionIds], [ActionIds],
+         [TemplateEventIds]
+       - Contract/mission profiles: [MissionIds], [StoreProfileId], [PlayerConditionIds],
+         [LeadPlayerConditionIds], [PersistantEventConditionIds]
        - Loot/Manipulation profiles: [ContainerTypes], [ContainerTypeAssignSubtypeId],
-         [AssignContainerTypesToAllCargo]
+         [AssignContainerTypesToAllCargo], [ContainerTypeSubtypeIds], [BlockReplacerProfileNames]
     3. Collect and cross-reference the separate string-Tag broadcast system, distinct from
        SubtypeId lookups: [Tags:] declared on [RivalAI Trigger]/[MES AI Trigger] profiles
        and on [MES Event] profiles (two independent, non-unique, many-to-many pools - by
@@ -32,7 +42,8 @@
     4. Cross-reference definitions and references to flag:
        - Missing / Dangling references (referenced but never defined)
        - Case mismatches (e.g. 'GVK-Action-Foo' vs 'GVK-Action-foo')
-       - Orphaned definitions (defined but never referenced anywhere)
+       - Orphaned definitions (defined but never referenced anywhere) - only for profile
+         types MES never activates on its own (not SpawnGroups, Events, Zones, prefabs)
 
     Known false-positive sources this script deliberately suppresses, and how:
     - References to profiles shipped inside MES's own Data folder (e.g.
@@ -192,7 +203,15 @@ $references = [System.Collections.Generic.List[PSObject]]::new()
 # unique-key definitions and must never get a "duplicate definition" warning.
 $triggerTagDefinitions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 $eventTagDefinitions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+# [Tags:] declared on an [MES Event Template] containing a {token}: the template text is
+# ReplaceText()'d per instance, so the declared tag becomes a concrete string at runtime.
+# A literal broadcast that matches one of these as a wildcard is live, not undeclared.
+$eventTemplateTagPatterns = [System.Collections.Generic.List[string]]::new()
 $tagReferences = [System.Collections.Generic.List[PSObject]]::new()
+
+# Owning SubtypeId -> profile header marker (e.g. "RivalAI Trigger"), used by the orphan
+# pass to report only profile types that MES never activates on its own.
+$profileHeaders = @{}
 
 function Register-TagReference($names, $file, $refType, $pool, $tokenResolves) {
     if ($null -eq $names) { return }
@@ -228,8 +247,19 @@ function Register-Definition($name, $file, $line, $type) {
     }
 }
 
-function Register-Reference($names, $file, $line, $refType) {
+# Set per Description block during the scan. [MES Event Template] / [MES Event Condition
+# Template] / [MES Event Action Template] text is run through IdsReplacer.ReplaceText()
+# with the instance's replace keys BEFORE its tags are parsed (Event.cs Profile getter and
+# Event.Init), so a token anywhere in such a block can resolve - every reference it makes
+# is token-aware regardless of RefType.
+$script:blockIsTextTemplate = $false
+
+# $tokenAware: $null = decide from RefType ($tokenAwareRefTypes in Pass 2); $true/$false =
+# per-context override. $severity "Warn" is for references MES reads but that may be
+# legitimate or inert when unresolved (see each call site).
+function Register-Reference($names, $file, $line, $refType, $tokenAware = $null, $severity = "Error") {
     if ($null -eq $names) { return }
+    if ($script:blockIsTextTemplate) { $tokenAware = $true }
     foreach ($n in $names) {
         if ([string]::IsNullOrWhiteSpace($n)) { continue }
         $trimmed = $n.Trim()
@@ -239,6 +269,8 @@ function Register-Reference($names, $file, $line, $refType) {
             File = $file
             Line = $line
             RefType = $refType
+            TokenAware = $tokenAware
+            Severity = $severity
         })
     }
 }
@@ -314,19 +346,39 @@ foreach ($file in $sbcFiles) {
             if ($line -match '<Prefab\s+[^>]*SubtypeId="([^"]+)"') {
                 Register-Reference @($matches[1].Trim()) $file $lineNum "SpawnGroupPrefab"
             }
+
+            # SpawnGroup <Prefab><Behaviour>: PrefabSpawner.cs copies it to
+            # NpcData.BehaviorName. With [UseRivalAi:true], BehaviorBuilder.cs looks it up
+            # in ProfileManager.BehaviorTemplates (exact TryGetValue; miss = "RivalAI Profile
+            # Does Not Exist", RC gets no behavior). Without RivalAI it is handed to Keen's
+            # drone AI (NpcData.cs SetDroneBehaviourFull), where a vanilla behavior name is
+            # legitimate - so an unresolved name is a warning, not an error.
+            if ($line -match '<Behaviour>([^<]+)</Behaviour>') {
+                Register-Reference @($matches[1].Trim()) $file $lineNum "SpawnGroupBehaviour" $false "Warn"
+            }
         }
     }
 
-    # Description profile block references
-    $descMatches = [System.Text.RegularExpressions.Regex]::Matches($content, '(?s)<Description>(.*?)</Description>')
+    # Description profile block references. The optional prefix captures the owning
+    # SubtypeId (the <Id> directly before <Description>) so the block's header can be
+    # recorded for the orphan pass.
+    $descMatches = [System.Text.RegularExpressions.Regex]::Matches($content, '(?s)(?:<SubtypeId>([^<]+)</SubtypeId>\s*</Id>\s*)?<Description>(.*?)</Description>')
     foreach ($dm in $descMatches) {
-        $block = $dm.Groups[1].Value
+        $block = $dm.Groups[2].Value
+        if ($dm.Groups[1].Success) {
+            $headerMatch = [regex]::Match($block, '\[([A-Za-z][A-Za-z ]*)\]')
+            if ($headerMatch.Success) { $profileHeaders[$dm.Groups[1].Value.Trim()] = $headerMatch.Groups[1].Value }
+        }
+        $script:blockIsTextTemplate = $block -match '\[MES Event (Template|Condition Template|Action Template)\]'
 
         # --- String-Tag pool membership: which pool a [Tags:] declaration in THIS block
         # belongs to depends on the profile type marker present in the block (TriggerProfile
         # vs EventProfile are separate C# classes with separate Tags fields/pools).
+        # [MES Event Template] instances build an EventProfile from the template text
+        # (Event.cs Profile getter), so their [Tags:] join the Event-tag pool too.
         $isTriggerProfile = $block -match '\[(RivalAI|MES AI) Trigger\]'
-        $isEventProfile = $block -match '\[MES Event\]'
+        $isEventProfile = $block -match '\[MES Event( Template)?\]'
+        $isMissionProfile = $block -match '\[MES Mission\]'
         # ActionReferenceProfile.cs (RivalAI/MES AI Action, live NpcData via ActionSystem.cs)
         # and EventActionReference.cs (MES Event Action, npcData=null) are SEPARATE C# classes
         # that happen to both declare ToggleEvent*/ResetEventCooldown* fields - confirmed by
@@ -337,7 +389,13 @@ foreach ($file in $sbcFiles) {
             foreach ($t in (Parse-CsvTags $block 'Tags')) { [void]$triggerTagDefinitions.Add($t) }
         }
         if ($isEventProfile) {
-            foreach ($t in (Parse-CsvTags $block 'Tags')) { [void]$eventTagDefinitions.Add($t) }
+            foreach ($t in (Parse-CsvTags $block 'Tags')) {
+                if ($script:blockIsTextTemplate -and $t -match '\{[^}]+\}') {
+                    $eventTemplateTagPatterns.Add((Convert-TokenRefToPattern $t))
+                } else {
+                    [void]$eventTagDefinitions.Add($t)
+                }
+            }
         }
 
         # Trigger-tag pool consumers - all confirmed to run through IdsReplacer with live
@@ -377,13 +435,50 @@ foreach ($file in $sbcFiles) {
         Register-Reference (Parse-CsvTags $block 'TriggerGroups') $file 0 "TriggerGroup"
         Register-Reference (Parse-CsvTags $block 'AutopilotData') $file 0 "Autopilot"
         Register-Reference (Parse-CsvTags $block 'SecondaryAutopilotData') $file 0 "Autopilot"
+        Register-Reference (Parse-CsvTags $block 'TertiaryAutopilotData') $file 0 "Autopilot"
         Register-Reference (Parse-CsvTags $block 'TargetData') $file 0 "Target"
-        Register-Reference (Parse-CsvTags $block 'WeaponProfiles') $file 0 "WeaponSystem"
+        # WeaponSystem.cs accepts both spellings.
+        Register-Reference (Parse-CsvTags $block 'WeaponSystem') $file 0 "WeaponSystem"
+        Register-Reference (Parse-CsvTags $block 'WeaponsSystem') $file 0 "WeaponSystem"
 
         # Trigger references
         Register-Reference (Parse-CsvTags $block 'Conditions') $file 0 "Condition"
         Register-Reference (Parse-CsvTags $block 'Actions') $file 0 "Action"
+        Register-Reference (Parse-CsvTags $block 'ElseActions') $file 0 "Action"
         Register-Reference (Parse-CsvTags $block 'ToggleWithTriggerProfile') $file 0 "Trigger"
+
+        # Trigger-name toggles. Enable/Disable/ResetTriggerCooldownNames exist only on
+        # ActionReferenceProfile.cs and go through TriggerSystem.ToggleTriggers(List), which
+        # IdsReplacer.ReplaceId()s each name - token-aware. [DisableNamedTriggerOnSuccess:]
+        # (TriggerProfile.cs) calls the string overload directly, no replace - static.
+        # Either way the match is an exact == against triggers on the same behavior.
+        Register-Reference (Parse-CsvTags $block 'EnableTriggerNames') $file 0 "TriggerName"
+        Register-Reference (Parse-CsvTags $block 'DisableTriggerNames') $file 0 "TriggerName"
+        Register-Reference (Parse-CsvTags $block 'ResetTriggerCooldownNames') $file 0 "TriggerName"
+        # Aliases that write to the same lists (ActionReferenceProfile.cs tag dictionary).
+        Register-Reference (Parse-CsvTags $block 'EnableTriggerIds') $file 0 "TriggerName"
+        Register-Reference (Parse-CsvTags $block 'DisableTriggerIds') $file 0 "TriggerName"
+        Register-Reference (Parse-CsvTags $block 'DisableNamedTriggerOnSuccess') $file 0 "TriggerNameStatic"
+
+        # Condition references. [RequiredSpawnConditions:] is compared with == against the
+        # NPC's spawn-conditions ProfileSubtypeId (ConditionProfile.cs) - a spawn-conditions
+        # profile or, for inline conditions, the SpawnGroup's own name. Both are indexed.
+        Register-Reference (Parse-CsvTags $block 'RequiredSpawnConditions') $file 0 "SpawnCondition"
+        # PlayerCondition.ArePlayerConditionsMet: exact TryGetValue, no replace.
+        Register-Reference (Parse-CsvTags $block 'PlayerConditionIds') $file 0 "PlayerCondition"
+        Register-Reference (Parse-CsvTags $block 'LeadPlayerConditionIds') $file 0 "PlayerCondition"
+
+        # [WaypointsToAdd:] -> ActionSystem.cs IdsReplacer.ReplaceId() then
+        # EncounterWaypoint.CalculateWaypoint's exact WaypointProfiles lookup - token-aware.
+        Register-Reference (Parse-CsvTags $block 'WaypointsToAdd') $file 0 "Waypoint"
+        # [Waypoint:] is a WaypointProfiles reference only in Spawn and Command profiles
+        # (BehaviorSpawnHelper.cs / CommandHelper.cs, both IdsReplacer.ReplaceId first). In a
+        # [RivalAI Waypoint] profile the same tag is the waypoint-type enum (Static, ...).
+        if ($block -match '\[(RivalAI|MES AI) (Spawn|Command)\]') {
+            Register-Reference (Parse-CsvTags $block 'Waypoint') $file 0 "Waypoint"
+        }
+        # [NewBehavior:] -> CoreBehavior.ChangeBehavior exact BehaviorTemplates lookup.
+        Register-Reference (Parse-CsvTags $block 'NewBehavior') $file 0 "Behavior"
 
         # Action references
         Register-Reference (Parse-CsvTags $block 'Spawner') $file 0 "Spawner"
@@ -401,29 +496,52 @@ foreach ($file in $sbcFiles) {
         # Spawner references
         Register-Reference (Parse-CsvTags $block 'SpawnGroups') $file 0 "SpawnGroup"
 
-        # SpawnGroup & Manipulation references
+        # SpawnGroup & Manipulation references (all exact TryGetValue lookups)
         Register-Reference (Parse-CsvTags $block 'SpawnConditionsProfiles') $file 0 "SpawnCondition"
+        Register-Reference (Parse-CsvTags $block 'SpawnConditionGroups') $file 0 "SpawnConditionGroup"
         Register-Reference (Parse-CsvTags $block 'DerelictionProfiles') $file 0 "Dereliction"
         Register-Reference (Parse-CsvTags $block 'ManipulationProfiles') $file 0 "Manipulation"
-        Register-Reference (Parse-CsvTags $block 'BlockReplacementProfiles') $file 0 "BlockReplacement"
+        Register-Reference (Parse-CsvTags $block 'ManipulationGroups') $file 0 "ManipulationGroup"
+        Register-Reference (Parse-CsvTags $block 'BlockReplacerProfileNames') $file 0 "BlockReplacement"
         Register-Reference (Parse-CsvTags $block 'LootProfiles') $file 0 "Loot"
         Register-Reference (Parse-CsvTags $block 'LootGroups') $file 0 "LootGroup"
         Register-Reference (Parse-CsvTags $block 'ReplenishProfiles') $file 0 "Replenishment"
+        # TagParse.TagZoneConditionsProfileCheck: a miss is silently dropped from the list.
+        Register-Reference (Parse-CsvTags $block 'ZoneConditions') $file 0 "ZoneConditions"
 
-        # Store references
-        Register-Reference (Parse-CsvTags $block 'StoreItems') $file 0 "StoreItem"
+        # Zone spawn-group lists (Zone.cs / ZoneManager.cs): literal names, no replace.
+        # [RestrictedSpawnGroups:] is only read when [UseRestrictedSpawnGroups:true], so an
+        # unresolved name in an inactive list is stale config, not a live bug.
+        $restrictedSeverity = if ($block -match '\[UseRestrictedSpawnGroups:\s*true\s*\]') { "Error" } else { "Warn" }
+        Register-Reference (Parse-CsvTags $block 'RestrictedSpawnGroups') $file 0 "ZoneSpawnGroup" $null $restrictedSeverity
+        Register-Reference (Parse-CsvTags $block 'AllowedSpawnGroups') $file 0 "ZoneSpawnGroup"
 
         # Container-type / loot-table references (validated against local
         # ContainerType definitions, MES's shipped types, and vanilla SE's stock types)
         Register-Reference (Parse-CsvTags $block 'ContainerTypes') $file 0 "ContainerType"
         Register-Reference (Parse-CsvTags $block 'ContainerTypeAssignSubtypeId') $file 0 "ContainerType"
         Register-Reference (Parse-CsvTags $block 'AssignContainerTypesToAllCargo') $file 0 "ContainerType"
+        Register-Reference (Parse-CsvTags $block 'ContainerTypeSubtypeIds') $file 0 "ContainerType"
 
         # Event references
         Register-Reference (Parse-CsvTags $block 'ConditionIds') $file 0 "EventCondition"
+        Register-Reference (Parse-CsvTags $block 'PersistantConditionIds') $file 0 "EventCondition"
+        Register-Reference (Parse-CsvTags $block 'PersistantEventConditionIds') $file 0 "EventCondition"
         Register-Reference (Parse-CsvTags $block 'ActionIds') $file 0 "EventAction"
+        Register-Reference (Parse-CsvTags $block 'TemplateEventIds') $file 0 "EventTemplate"
+
+        # Contracts & missions. ContractBlockProfiles (ActionSystem.cs), MissionIds
+        # (ContractBlockProfile.cs) and a mission's StoreProfileId (Mission.cs) are exact
+        # lookups with no replace. InstanceEventGroupId is passed raw from RivalAI and MES
+        # Event actions, but a [MES Mission] ReplaceText()s it with the mission's keys
+        # (Mission.cs) - token-aware only there.
+        Register-Reference (Parse-CsvTags $block 'ContractBlockProfiles') $file 0 "ContractBlock"
+        Register-Reference (Parse-CsvTags $block 'MissionIds') $file 0 "Mission"
+        Register-Reference (Parse-CsvTags $block 'StoreProfileId') $file 0 "Store" $false
+        Register-Reference (Parse-CsvTags $block 'InstanceEventGroupId') $file 0 "EventTemplateGroup" $isMissionProfile
     }
 }
+$script:blockIsTextTemplate = $false
 
 Write-Host "Total Definitions Indexed: $($definitions.Count)" -ForegroundColor Gray
 Write-Host "Total References Checked: $($references.Count)" -ForegroundColor Gray
@@ -472,17 +590,29 @@ foreach ($ref in $references) {
     #   - ManuallyActivatedTriggerNames, Event (from [ActivateEventIds:]) -> IdsReplacer,
     #                      same RivalAI Behavior/live-NpcData call sites as their *Tags
     #                      siblings in the string-Tag system below
-    $tokenAwareRefTypes = @("SpawnGroup", "Store", "ToggleEvent", "ResetEvent", "ManuallyActivatedTriggerNames", "Event")
+    #   - TriggerName (Enable/Disable/ResetTriggerCooldownNames), Waypoint ([WaypointsToAdd:], Spawn/Command [Waypoint:]) ->
+    #                      IdsReplacer.ReplaceId per name (TriggerSystem.ToggleTriggers /
+    #                      ActionSystem AddWaypoints), live NpcData
+    # A reference can also carry a per-context override ($ref.TokenAware): every reference
+    # inside an [MES Event Template]/[... Condition Template]/[... Action Template] block is
+    # token-aware (the whole template text is ReplaceText()'d per instance), and
+    # [InstanceEventGroupId:] is token-aware only inside a [MES Mission].
+    $tokenAwareRefTypes = @("SpawnGroup", "Store", "ToggleEvent", "ResetEvent", "ManuallyActivatedTriggerNames", "Event", "TriggerName", "Waypoint")
+    $isTokenAware = $tokenAwareRefTypes -contains $ref.RefType
+    if ($null -ne $ref.TokenAware) { $isTokenAware = $ref.TokenAware }
     if ($refName -match '\{[^}]+\}') {
-        if ($tokenAwareRefTypes -notcontains $ref.RefType) {
+        if (-not $isTokenAware) {
             Write-Host "[ERROR] Token in Static Reference ($($ref.RefType)): '$refName' in $($ref.File.Name) contains a runtime token, but MES has no substitution mechanism for $($ref.RefType) references (confirmed against source - always a literal SubtypeId lookup). This will always fail to find the profile, regardless of context." -ForegroundColor Red
             $errors++
             continue
         }
 
         $tokenPattern = Convert-TokenRefToPattern $refName
+        # Every local definition the pattern could resolve to counts as used (orphan pass).
+        $localMatches = @($definitions.Keys | Where-Object { $_ -match $tokenPattern })
+        foreach ($lm in $localMatches) { [void]$referencedNames.Add($lm) }
         $wildcardMatch =
-            ($definitions.Keys | Where-Object { $_ -match $tokenPattern } | Select-Object -First 1) -or
+            ($localMatches.Count -gt 0) -or
             ($mesCoreDefinitions | Where-Object { $_ -match $tokenPattern } | Select-Object -First 1) -or
             ($vanillaContainerTypes | Where-Object { $_ -match $tokenPattern } | Select-Object -First 1)
         if ($wildcardMatch) {
@@ -501,8 +631,18 @@ foreach ($ref in $references) {
     if ($ref.RefType -eq "ContainerType" -and $vanillaContainerTypes.Contains($refName)) { continue }
 
     if (-not $definitionsLower.ContainsKey($refLower)) {
-        Write-Host "[ERROR] Missing Reference ($($ref.RefType)): '$refName' referenced in $($ref.File.Name) is not defined anywhere!" -ForegroundColor Red
-        $errors++
+        if ($ref.Severity -eq "Warn") {
+            $why = switch ($ref.RefType) {
+                "SpawnGroupBehaviour" { "not a RivalAI Behavior in this mod or MES. With [UseRivalAi:true] the Remote Control gets no behavior; it is only valid if it names a vanilla Keen drone AI behavior." }
+                "ZoneSpawnGroup" { "not a SpawnGroup. This list is inactive ([UseRestrictedSpawnGroups:true] is not set), so it has no effect until enabled - stale entry." }
+                default { "not defined anywhere." }
+            }
+            Write-Host "[WARN] Unresolved Reference ($($ref.RefType)): '$refName' in $($ref.File.Name) is $why" -ForegroundColor Yellow
+            $warnings++
+        } else {
+            Write-Host "[ERROR] Missing Reference ($($ref.RefType)): '$refName' referenced in $($ref.File.Name) is not defined anywhere!" -ForegroundColor Red
+            $errors++
+        }
     } elseif (-not $definitions.ContainsKey($refName)) {
         $actual = $definitionsLower[$refLower].ExactName
         Write-Host "[WARN] Case Mismatch ($($ref.RefType)): '$refName' in $($ref.File.Name) does not match definition '$actual' in $($definitionsLower[$refLower].File.Name)" -ForegroundColor Yellow
@@ -516,8 +656,14 @@ foreach ($ref in $references) {
 Write-Host "Trigger Tags Declared: $($triggerTagDefinitions.Count) | Event Tags Declared: $($eventTagDefinitions.Count) | Tag References Checked: $($tagReferences.Count)" -ForegroundColor Gray
 foreach ($tref in $tagReferences) {
     $tagName = $tref.Name
-    $pool = if ($tref.Pool -eq "Trigger") { $triggerTagDefinitions } else { $eventTagDefinitions }
-    $poolLabel = if ($tref.Pool -eq "Trigger") { "Trigger-tag" } else { "Event-tag" }
+    # Plain assignment, not "$pool = if (...) { $set }": PowerShell enumerates a statement's
+    # output, so an EMPTY HashSet would come back as $null and .Contains() would throw.
+    $pool = $eventTagDefinitions
+    $poolLabel = "Event-tag"
+    if ($tref.Pool -eq "Trigger") {
+        $pool = $triggerTagDefinitions
+        $poolLabel = "Trigger-tag"
+    }
 
     if ($tagName -match '\{[^}]+\}') {
         if (-not $tref.TokenResolves) {
@@ -537,6 +683,10 @@ foreach ($tref in $tagReferences) {
     }
 
     if (-not $pool.Contains($tagName)) {
+        if ($tref.Pool -eq "Event" -and ($eventTemplateTagPatterns | Where-Object { $tagName -match $_ } | Select-Object -First 1)) {
+            Write-Host "[INFO] Template Tag Match ($($tref.RefType)): '$tagName' in $($tref.File.Name) matches a tokenized [Tags:] on an [MES Event Template] (resolved per instance) - live, not further verifiable statically." -ForegroundColor DarkCyan
+            continue
+        }
         Write-Host "[ERROR] Undeclared Tag ($($tref.RefType)): '$tagName' in $($tref.File.Name) does not match any declared $poolLabel ([Tags:] on a matching profile) - this broadcast silently does nothing (MES's tag match is an exact List.Contains(), no error is logged)." -ForegroundColor Red
         $errors++
     }
@@ -544,15 +694,34 @@ foreach ($tref in $tagReferences) {
 
 # Pass 3: Check for orphans (optional)
 if ($WarnOrphans) {
-    foreach ($defKey in $definitions.Keys) {
-        if (-not $referencedNames.Contains($defKey)) {
-            $def = $definitions[$defKey]
-            # Ignore root objects that are naturally unreferenced like SpawnGroups or Prefabs
-            if ($def.Type -eq "SubtypeId" -and $def.File.FullName -notmatch '\\(Prefabs|StorePrefabs)(\\|$)' -and $defKey -notmatch 'SpawnGroup') {
-                Write-Host "[INFO] Potentially Unused Profile: '$defKey' in $($def.File.Name):$($def.Line)" -ForegroundColor DarkGray
-            }
-        }
+    # Only profile types that do nothing unless something references them (registered in
+    # ProfileManager.cs as lookup tables). Self-activating roots - SpawnGroups, [MES Event],
+    # [MES Zone], [MES Static Encounter], [MES Weapon Mod Rules], [MES Suit Upgrades],
+    # prefabs, etc. - are legitimately unreferenced and never reported.
+    $referenceOnlyHeaders = @(
+        "RivalAI Trigger", "MES AI Trigger", "RivalAI TriggerGroup", "MES AI TriggerGroup",
+        "RivalAI Action", "MES AI Action", "RivalAI Condition", "MES AI Condition",
+        "RivalAI Chat", "MES AI Chat", "RivalAI Spawn", "MES AI Spawn",
+        "RivalAI Target", "MES AI Target", "RivalAI Autopilot", "MES AI Autopilot",
+        "RivalAI Waypoint", "MES AI Waypoint", "RivalAI Weapons", "MES AI Weapons",
+        "RivalAI Command", "MES AI Command", "RivalAI Behavior", "Rival AI Behavior", "MES AI Behavior",
+        "MES Event Action", "MES Event Condition", "MES Event Action Template",
+        "MES Event Condition Template", "MES Event Template", "MES Event TemplateGroup",
+        "MES Mission", "MES Contract Block", "MES Store", "MES Loot", "MES Loot Group",
+        "MES Manipulation", "MES Manipulation Group", "MES Spawn Conditions",
+        "MES Spawn Conditions Group", "MES Zone Conditions", "MES Block Replacement",
+        "MES Dereliction", "MES Replenishment", "MES SafeZone", "MES Player Condition"
+    )
+    $orphanCount = 0
+    foreach ($defKey in ($definitions.Keys | Sort-Object)) {
+        if ($referencedNames.Contains($defKey)) { continue }
+        $header = $profileHeaders[$defKey]
+        if ($null -eq $header -or $referenceOnlyHeaders -notcontains $header) { continue }
+        $def = $definitions[$defKey]
+        Write-Host "[INFO] Potentially Unused Profile ($header): '$defKey' in $($def.File.Name):$($def.Line)" -ForegroundColor DarkGray
+        $orphanCount++
     }
+    Write-Host "Potentially unused profiles: $orphanCount (Block Replacement / Loot profiles may also be referenced from MES world config, which this audit cannot see)." -ForegroundColor Gray
 }
 
 Write-Host ""
@@ -560,7 +729,7 @@ if ($errors -eq 0 -and $warnings -eq 0) {
     Write-Host "All profile cross-references verified successfully!" -ForegroundColor Green
     exit 0
 } else {
-    Write-Host "Cross-Reference Audit Complete: $errors missing reference(s), $warnings case mismatch(es)." -ForegroundColor $(if ($errors -gt 0) { "Red" } else { "Yellow" })
+    Write-Host "Cross-Reference Audit Complete: $errors error(s), $warnings warning(s)." -ForegroundColor $(if ($errors -gt 0) { "Red" } else { "Yellow" })
     if ($errors -gt 0) { exit 1 }
 }
 
